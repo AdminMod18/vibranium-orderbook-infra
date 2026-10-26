@@ -4,6 +4,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 need docker kind kubectl
 cd "$ROOT"
+need_free_gb
 
 if kind get clusters 2>/dev/null | grep -qx "$CLUSTER"; then
   info "el cluster '$CLUSTER' ya existe (no se toca)"

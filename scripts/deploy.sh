@@ -5,6 +5,7 @@ ENV_NAME=${1:?uso: scripts/deploy.sh local|staging|prod}
 . "$(dirname "$0")/lib.sh"
 need kubectl
 cd "$ROOT"
+[ "$ENV_NAME" = local ] && need_free_gb
 [ -d "overlays/$ENV_NAME" ] || die "no existe overlays/$ENV_NAME"
 guard_context
 if [ "$ENV_NAME" != local ]; then

@@ -22,3 +22,13 @@ guard_context() {
     [ "${CONFIRM_CONTEXT:-}" = "$ctx" ] || die "va a tocar el ambiente '$ENV_NAME' en el contexto '$ctx'. Confirme con: CONFIRM_CONTEXT=$ctx $0 ..."
   fi
 }
+
+# Espacio libre en el disco donde vive el repo (en Docker Desktop/WSL2 el disco virtual de Docker crece sobre ESTE disco: si se llena,
+# el motor se cuelga y el cluster deja de responder). El disco virtual NO lo ve: Grafana puede mostrar cientos de GiB libres con 0 bytes reales.
+need_free_gb() {
+  local min=${MIN_FREE_GB:-20} free
+  [ -n "${CI:-}" ] && return 0                      # los runners de CI son efímeros
+  free=$(df -Pk "$ROOT" 2>/dev/null | awk 'NR==2{printf "%d", $4/1024/1024}')
+  [ -n "$free" ] || return 0
+  [ "$free" -ge "$min" ] || die "solo quedan ${free} GiB libres en el disco (mínimo ${min}). Una corrida de carga genera varios GiB (journal + Postgres + métricas) y con el disco lleno Docker se cuelga. Libere espacio, o defina MIN_FREE_GB=<n> bajo su responsabilidad."
+}
