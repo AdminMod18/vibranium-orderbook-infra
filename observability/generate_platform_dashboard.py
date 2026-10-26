@@ -145,10 +145,13 @@ ts("Reinicios de contenedores por pod", [tgt(f"sum by (pod) (kube_pod_container_
    "Debe ser plano. Un escalón indica un crash o un OOM de ese pod.")
 
 row("3 · Proceso del order book (métricas de la propia aplicación)", "Equivalente de plataforma para un único escritor: ¿arranca, se reinicia, cuánto consume?")
-stat("Tiempo en marcha", 'time() - process_start_time_seconds{job="orderbook"}', "s", steps((None, "yellow"), (60, "green")),
-     "Desde el último arranque del proceso. Amarillo = arrancó hace menos de 1 minuto (recién recreado).", decimals=0)
-stat("Reinicios (1 h)", 'changes(process_start_time_seconds{job="orderbook"}[1h])', "short", steps((None, "green"), (1, "yellow"), (3, "red")),
-     "Veces que el proceso arrancó en la última hora (crash, OOM o despliegue). 0 = estable.", decimals=0)
+stat("Contenedor en marcha", f'time() - kube_pod_container_state_started{{namespace="$namespace",pod="orderbook-0",container="orderbook"}}', "s",
+     steps((None, "yellow"), (60, "green")),
+     "Tiempo desde que arrancó el contenedor del order book (kube-state-metrics). Vuelve a 0 si el pod se recrea o el contenedor se reinicia; amarillo = arrancó hace menos de 1 minuto.", decimals=0)
+stat("Reinicios del contenedor", f'sum(kube_pod_container_status_restarts_total{{namespace="$namespace",pod="orderbook-0"}})', "short",
+     steps((None, "green"), (1, "yellow"), (3, "red")),
+     "Veces que Kubernetes reinició el contenedor (crash u OOM). Un pod recreado por el StatefulSet es un pod nuevo y se ve en el uptime, no aquí. "
+     "(No se usa process_start_time_seconds: en Docker Desktop/WSL2 salta ±1 s y daba reinicios falsos.)", decimals=0)
 stat("CPU del proceso (núcleos)", f'rate(process_cpu_seconds_total{{job="orderbook"}}[{R}])', "short", desc="Núcleos que consume el order book (sin límite de CPU en el pod, a propósito).", decimals=2)
 stat("Memoria RSS", 'process_resident_memory_bytes{job="orderbook"}', "bytes", steps((None, "green"), (2.5 * 1024**3, "yellow"), (3.5 * 1024**3, "red")),
      "Memoria residente. El límite del pod es 4 GiB (local) y GOMEMLIMIT=3 GiB hace que el GC apriete antes.")

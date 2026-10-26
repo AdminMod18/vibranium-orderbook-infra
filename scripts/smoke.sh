@@ -54,9 +54,13 @@ for m in up nginx_ingress_controller_requests nginx_ingress_controller_request_d
          nginx_ingress_controller_nginx_process_connections process_start_time_seconds process_cpu_seconds_total \
          process_resident_memory_bytes process_open_fds go_goroutines orderbook_http_requests_total \
          container_cpu_usage_seconds_total container_memory_working_set_bytes container_network_receive_bytes_total \
-         kube_pod_info kube_pod_status_ready kube_pod_container_status_restarts_total kube_pod_container_resource_limits; do
+         kube_pod_info kube_pod_status_ready kube_pod_container_status_restarts_total kube_pod_container_resource_limits \
+         kube_pod_container_state_started; do
   prom_has "$m" && pass "métrica disponible: $m" || bad "métrica disponible: $m" "sin datos en Prometheus"
 done
+# El tráfico del order book (Ingress SIN host, accedido como localhost) debe contarse en el ingress: una serie ingress="orderbook".
+prom_has 'nginx_ingress_controller_requests%7Bingress%3D%22orderbook%22%7D' && pass 'el ingress registra el tráfico del order book (ingress="orderbook")' \
+  || bad 'el ingress registra el tráfico del order book (ingress="orderbook")' "sin datos: el controlador descarta las peticiones (¿--metrics-per-host?)"
 for J in ingress-nginx cadvisor kube-state-metrics; do   # cada job debe VALER up=1 (no basta con que exista el target)
   UPI=""; for _ in $(seq 1 30); do
     UPI=$(k exec prometheus-0 -- wget -qO- "http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22$J%22%7D" 2>&1); [[ "$UPI" == *',"1"]'* ]] && break; sleep 2; done

@@ -11,3 +11,7 @@ patches:
     patch: |-
       - {op: test, path: /spec/template/spec/containers/0/args/9, value: --enable-metrics=false}
       - {op: replace, path: /spec/template/spec/containers/0/args/9, value: --enable-metrics=true}
+      # Por defecto el controlador SOLO registra métricas de los hosts declarados en algún Ingress y descarta el resto
+      # ("Skipping metric for host not being served"). El Ingress del order book no declara host (así acepta http://localhost:8080),
+      # por lo que sus peticiones no aparecían en el dashboard. Con false se registran todas, sin etiqueta de host (menos cardinalidad).
+      - {op: add, path: /spec/template/spec/containers/0/args/-, value: --metrics-per-host=false}

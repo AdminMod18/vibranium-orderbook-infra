@@ -1595,8 +1595,8 @@
   {
    "id": 27,
    "type": "stat",
-   "title": "Tiempo en marcha",
-   "description": "Desde el último arranque del proceso. Amarillo = arrancó hace menos de 1 minuto (recién recreado).",
+   "title": "Contenedor en marcha",
+   "description": "Tiempo desde que arrancó el contenedor del order book (kube-state-metrics). Vuelve a 0 si el pod se recrea o el contenedor se reinicia; amarillo = arrancó hace menos de 1 minuto.",
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -1610,7 +1610,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "time() - process_start_time_seconds{job=\"orderbook\"}",
+     "expr": "time() - kube_pod_container_state_started{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\"}",
      "datasource": {
       "type": "prometheus",
       "uid": "prometheus"
@@ -1658,8 +1658,8 @@
   {
    "id": 28,
    "type": "stat",
-   "title": "Reinicios (1 h)",
-   "description": "Veces que el proceso arrancó en la última hora (crash, OOM o despliegue). 0 = estable.",
+   "title": "Reinicios del contenedor",
+   "description": "Veces que Kubernetes reinició el contenedor (crash u OOM). Un pod recreado por el StatefulSet es un pod nuevo y se ve en el uptime, no aquí. (No se usa process_start_time_seconds: en Docker Desktop/WSL2 salta ±1 s y daba reinicios falsos.)",
    "datasource": {
     "type": "prometheus",
     "uid": "prometheus"
@@ -1673,7 +1673,7 @@
    "targets": [
     {
      "refId": "A",
-     "expr": "changes(process_start_time_seconds{job=\"orderbook\"}[1h])",
+     "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"$namespace\",pod=\"orderbook-0\"})",
      "datasource": {
       "type": "prometheus",
       "uid": "prometheus"
