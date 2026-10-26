@@ -1,0 +1,15 @@
+# Expone las métricas del controlador (puerto 10254, activo por defecto) para que Prometheus las raspe. Solo ClusterIP: no sale del cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-nginx-controller-metrics
+  namespace: ingress-nginx
+  labels: {app.kubernetes.io/name: ingress-nginx, app.kubernetes.io/component: controller}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/instance: ingress-nginx
+    app.kubernetes.io/component: controller
+  ports:
+    - {name: metrics, port: 10254, targetPort: 10254}

@@ -12,7 +12,7 @@ resources:
 configMapGenerator:        # con sufijo hash: cambiar un archivo reinicia (roll) los pods que lo usan
   - name: prometheus-config
     files:
-      - observability/prometheus.yml
+      - prometheus.yml=observability/prometheus.platform.yml
       - observability/alerts.yml
   - name: grafana-provisioning
     files:
@@ -21,5 +21,6 @@ configMapGenerator:        # con sufijo hash: cambiar un archivo reinicia (roll)
   - name: grafana-dashboards
     files:
       - observability/grafana/orderbook.json
+      - observability/grafana/plataforma.json
 labels:
   - pairs: {app.kubernetes.io/part-of: vibranium}

@@ -43,7 +43,20 @@ R=$(k exec prometheus-0 -- wget -qO- http://localhost:9090/api/v1/rules 2>&1)
 N=$(grep -o '"type":"alerting"' <<<"$R" | wc -l | tr -d ' ')
 [ "$N" = 13 ] && pass "13 alertas cargadas" || bad "13 alertas cargadas" "$N"
 has "Grafana saludable por el ingress" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/health")" '"database": "ok"'
-has "dashboard provisionado" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/search?query=Order")" orderbook-overview
+has "dashboard de la app provisionado" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/search?query=Order")" orderbook-overview
+has "dashboard de la plataforma provisionado" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/search?query=Plataforma")" plataforma-k8s
+# Cada métrica que usa el dashboard de plataforma debe EXISTIR en Prometheus (si no, el panel mostraría "No data").
+prom_has() {  # $1 = consulta PromQL sin caracteres especiales; espera hasta 60 s al primer scrape
+  local r=""; for _ in $(seq 1 30); do
+    r=$(k exec prometheus-0 -- wget -qO- "http://localhost:9090/api/v1/query?query=$1" 2>&1)
+    [[ "$r" == *'"result":[{'* ]] && return 0; sleep 2; done; return 1; }
+for m in up nginx_ingress_controller_requests nginx_ingress_controller_request_duration_seconds_count \
+         nginx_ingress_controller_nginx_process_connections process_start_time_seconds process_cpu_seconds_total \
+         process_resident_memory_bytes process_open_fds go_goroutines orderbook_http_requests_total; do
+  prom_has "$m" && pass "métrica disponible: $m" || bad "métrica disponible: $m" "sin datos en Prometheus"
+done
+UPI=$(k exec prometheus-0 -- wget -qO- "http://localhost:9090/api/v1/query?query=up" 2>&1)
+has "Prometheus alcanza el ingress (job ingress-nginx, up)" "$UPI" '"job":"ingress-nginx"'
 
 echo "5) Historial en Postgres (order book -> Postgres a través de las NetworkPolicy)"
 H=""; for _ in $(seq 1 60); do H=$(api "/audit/history/$AL"); [[ "$H" == *'"lag":0'* ]] && break; sleep 2; done
