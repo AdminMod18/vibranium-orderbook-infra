@@ -27,6 +27,9 @@ seed() {
   code /orders -XPOST -d "{\"id\":\"cs-$RUN\",\"user_id\":\"$BO\",\"side\":\"SELL\",\"price\":4100,\"qty\":10}" >/dev/null
   code /orders -XPOST -d "{\"id\":\"cb-$RUN\",\"user_id\":\"$AL\",\"side\":\"BUY\",\"price\":4100,\"qty\":4}" >/dev/null
   code /orders -XPOST -d "{\"id\":\"cr-$RUN\",\"user_id\":\"$AL\",\"side\":\"BUY\",\"price\":4000,\"qty\":7}" >/dev/null
+  # GET /orders/{id} lee del historial (Postgres, eventualmente consistente): se espera a que alcance al journal antes de fotografiar el
+  # estado, o la comparación "antes/después" mediría una carrera y no la recuperación.
+  for _ in $(seq 1 60); do [[ "$(api "/audit/history/$AL")" == *'"lag":0'* ]] && break; sleep 1; done
 }
 snapshot() { printf '%s\n%s\n%s\n%s\n' "$(api /balances/$AL)" "$(api /balances/$BO)" "$(api /orders/cs-$RUN)" "$(api /audit)"; }
 
