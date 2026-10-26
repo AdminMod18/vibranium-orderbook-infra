@@ -39,16 +39,16 @@ los recursos se ajustan por overlay sin tocar la base.
 
 | Falla | Comportamiento esperado | Mecanismo | Verificación |
 |---|---|---|---|
-| El proceso/pod del order book muere | Se recrea solo; reproduce el journal; **mismo estado** | `StatefulSet` + PVC con el journal; `startupProbe` tolera hasta 5 min de reproducción | `scripts/chaos.sh kill-pod` ⏳ |
-| El pod arranca pero aún no está listo | No recibe tráfico | `readinessProbe` sobre `/readyz` (secuenciador activo) | smoke ⏳ |
+| El proceso/pod del order book muere | Se recrea solo; reproduce el journal; **mismo estado** | `StatefulSet` + PVC con el journal; `startupProbe` tolera hasta 5 min de reproducción | `scripts/chaos.sh kill-pod` ✅ (estado idéntico; RTO 4.1 s con journal casi vacío) |
+| El pod arranca pero aún no está listo | No recibe tráfico | `readinessProbe` sobre `/readyz` (secuenciador activo) | smoke ✅ |
 | El proceso se cuelga | Se reinicia el contenedor | `livenessProbe` sobre `/healthz` | — |
-| Postgres cae | El **mercado sigue**; el historial responde 503 y se reconcilia al volver | diseño de la app (el journal es la verdad) | `scripts/chaos.sh postgres-down` ⏳ |
+| Postgres cae | El **mercado sigue**; el historial responde 503 y se reconcilia al volver | diseño de la app (el journal es la verdad) | `scripts/chaos.sh postgres-down` ✅ |
 | Cambio de configuración/imagen | Reinicio ordenado (30 s de gracia) | `terminationGracePeriodSeconds`, hash en ConfigMaps | — |
 | Disco del journal lleno | Fail-stop y alerta antes de llegar (`JournalDiskLow`) | métrica `journal_disk_free_bytes` | alertas (promtool) |
 
 **Limitaciones (hechos):**
 - **No hay alta disponibilidad del escritor.** Hay *recuperación rápida* (reproducir el journal tarda ≈ 8 s por millón de registros),
-  durante la cual no se aceptan órdenes. RTO = tiempo de arranque + reproducción; el valor medido se registrará en `EVIDENCIA.md`.
+  durante la cual no se aceptan órdenes. RTO = tiempo de arranque + reproducción. **Medido: 4.1 s** con el journal casi vacío (un solo dato; ver `EVIDENCIA.md`); con un journal grande hay que sumar ≈ 8 s por millón de registros.
 - El volumen del journal está atado a un nodo en kind (`local-path`). Si el nodo muere, el pod no se mueve solo. En un cluster
   cloud, un volumen de red con replicación (por zona) resuelve la parte del volumen; la HA del escritor requeriría una réplica
   seguidora, que **no está implementada** (ver `DECISIONES.md` de la app).
@@ -72,8 +72,8 @@ los recursos se ajustan por overlay sin tocar la base.
   con privilegios o sin seccomp. Todos los contenedores fijan `runAsNonRoot`, `allowPrivilegeEscalation: false`, `drop: [ALL]`; el order book
   además usa sistema de archivos raíz de solo lectura (solo escribe en `/data`).
 - **NetworkPolicy**: se deniega todo el tráfico entrante y se abren solo las rutas necesarias (ingress → API, Prometheus → 9102,
-  orderbook → Postgres, Grafana → Prometheus). *Salvedad:* una NetworkPolicy solo se aplica si el CNI la implementa; no he comprobado
-  si el CNI por defecto de kind lo hace. En un cluster con Calico/Cilium sí se aplica.
+  orderbook → Postgres, Grafana → Prometheus). *Comprobado:* una NetworkPolicy solo se aplica si el CNI la implementa; en el kind del CI **sí se aplican**
+  (`scripts/smoke.sh` §6: un pod sin etiqueta no alcanza a Postgres). En otro cluster, el script lo vuelve a informar.
 - **Secretos fuera de git** en staging/prod (`scripts/create-secret.sh`, contraseñas aleatorias, no sobrescribe uno existente).
   `local` usa credenciales de demo, aisladas en `components/demo-secrets` y rechazadas por la política en cualquier otro ambiente.
 - Imágenes con versión fija; `prod` exige una versión inmutable (la política lo verifica). `deploy.sh` exige confirmar el contexto de
@@ -100,6 +100,6 @@ cloud con Terraform (EKS/GKE); réplica seguidora para HA del escritor; shardear
 
 ## 9. Verificación
 
-Ver el cuadro de estado en el `README.md`. La validación estática (compilar overlays, esquema de Kubernetes, políticas) está
-ejecutada. El despliegue en un cluster real está **pendiente de ejecución** y se registrará en `docs/EVIDENCIA.md`
-con los resultados de `smoke.sh` y `chaos.sh`; hasta entonces, ninguna fila marcada ⏳ debe presentarse como comprobada.
+Ver el cuadro de estado en el `README.md` y el detalle en `docs/EVIDENCIA.md`. La validación estática y el despliegue en un kind real
+(humo y caos) están **ejecutados en el CI**. Siguen sin probarse: staging/prod, carga sostenida a través del ingress, un journal grande
+en el RTO y la ejecución en Docker Desktop; no deben presentarse como comprobados.

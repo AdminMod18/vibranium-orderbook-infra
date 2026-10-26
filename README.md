@@ -59,7 +59,12 @@ CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging               # exige confirmar 
 
 | Qué | Estado |
 |---|---|
-| Los 3 overlays compilan, cumplen el esquema de Kubernetes 1.31 (kubeconform) y las políticas de `scripts/policy.py` | ✅ ejecutado |
+| Los 3 overlays compilan, cumplen el esquema de Kubernetes 1.31 (kubeconform) y las políticas de `scripts/policy.py` | ✅ ejecutado (CI en cada push) |
 | Las políticas detectan imagen `latest`, réplicas ≠ 1 en el escritor y Secrets en git (mutaciones) | ✅ ejecutado |
-| Despliegue real en un cluster (kind): arranque, humo, caos | ⏳ pendiente de ejecutar en Docker Desktop / CI; los resultados se registrarán en `docs/EVIDENCIA.md` |
+| Despliegue real en kind (CI): cluster, ingress, imagen, 4 rollouts | ✅ ejecutado |
+| Humo 19/19: tráfico por el ingress, `/metrics` cerrado, 13 alertas, Grafana, historial, NetworkPolicy aplicadas | ✅ ejecutado |
+| Caos: crash del pod → estado idéntico, **RTO 4.1 s** (journal casi vacío); Postgres caído → el mercado sigue y el historial se reconcilia | ✅ ejecutado |
+| Ejecución en Docker Desktop (laptop del autor) | ⏳ pendiente |
 | Staging y prod | plantillas validadas estáticamente; no desplegadas |
+
+Detalle, enlaces a cada ejecución y lo que **no** se probó: [`docs/EVIDENCIA.md`](docs/EVIDENCIA.md).
