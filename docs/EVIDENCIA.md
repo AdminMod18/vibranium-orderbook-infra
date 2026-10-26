@@ -25,7 +25,30 @@ que usa existe** (un panel con "No data" falla el CI). Esa comprobación encontr
 | 10 ✅ | Smoke con todas las métricas y las dos pruebas de caos | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40401914740) |
 | 12 ✅ | Se añaden **cAdvisor y kube-state-metrics** (CPU/memoria/red por pod, reinicios, límites declarados). El smoke exige que existan 17 métricas y que `up = 1` en los jobs `ingress-nginx`, `cadvisor` y `kube-state-metrics`; pasó a la primera. | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40402738808) |
 
+| 14 ✅ | Hallazgos de la primera corrida con carga en la laptop (ver abajo): el ingress no contaba el tráfico del order book y "Reinicios" mostraba valores falsos. El smoke ahora exige la serie `ingress="orderbook"`. | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40406139590) |
+
 **Lo que NO se comprobó:** que los paneles del dashboard de plataforma *se vean bien* en un navegador. El CI verifica que las métricas existen y el dashboard se provisiona, no el aspecto.
+
+## Carga con JMeter a través del ingress, en la laptop del autor (10 min, GUI)
+
+JMeter apuntando a `localhost:8080` (ingress del cluster kind), plan `vibranium-load.jmx`, 10 min 4 s:
+
+| Dato (Summary Report de JMeter) | Valor |
+|---|---|
+| Muestras totales | **4,343,425** (`POST /orders` 4,047,370) |
+| **% de error, todas las filas** | **0.00%**, incluidos los 6 rechazos esperados (400, 404, 409, 422) y `TEARDOWN GET /audit` (invariantes y conservación) |
+| Rendimiento medio | 7,183 peticiones/s en total; **6,745 `POST /orders`/s** |
+| Latencia media / máximo | 15 ms / 2,150 ms (`POST`); el máximo de 3,160 ms es la auditoría final |
+| Order book (dashboard de plataforma) | CPU pico ≈ 2.3 núcleos; memoria RSS ≈ 2.4-2.5 GiB (límite del pod: 4 GiB) |
+
+**Limitaciones (hechos):** no es la corrida de 5,000/s del plan: el ritmo medio fue ~6.7 K órdenes/s. Es el modo GUI de JMeter, en la misma máquina que el cluster, Grafana y el navegador; **no** es una medición de capacidad. El máximo de ~2 s afecta a todos los endpoints a la vez (parada global: la escritura periódica del snapshot, limitación ya documentada). El lag del historial en Postgres sube a ritmos altos y se recupera al terminar (comportamiento conocido).
+
+**Dos fallos del dashboard que esta corrida destapó (y que el CI no veía), ya corregidos:**
+
+| Hallazgo | Causa | Corrección |
+|---|---|---|
+| El panel del ingress mostraba ~7 peticiones/s (solo Grafana) mientras el servidor contaba ~10 K/s; "p95/p99 en el ingress" salía **No data** | El controlador solo registra métricas de hosts declarados en algún Ingress; el del order book no declara host (para aceptar `localhost`) y sus peticiones se descartaban. Causa inferida de ese comportamiento y del síntoma; pendiente de confirmar viendo la serie en la laptop. | `--metrics-per-host=false`; el smoke exige la serie `ingress="orderbook"` (no podía detectarlo antes: el humo solo consultaba que existiera *alguna* serie del ingress, y las de Grafana la satisfacían). |
+| "Reinicios (1 h)" mostraba **62 y luego 94** sin que el pod hubiera reiniciado | `process_start_time_seconds` salta ±1 s en Docker Desktop/WSL2 y `changes()` cuenta cada salto | Uptime y reinicios salen ahora de kube-state-metrics (`kube_pod_container_state_started`, `kube_pod_container_status_restarts_total`). |
 
 ## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
 
