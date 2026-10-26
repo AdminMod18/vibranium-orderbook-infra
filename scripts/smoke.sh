@@ -36,13 +36,43 @@ has "/metrics NO sale por el ingress (puerto de administración aparte)" "$([ "$
 has "/debug/pprof NO sale por el ingress" "$([ "$(code "$API_HOST" /debug/pprof/)" != 200 ] && echo cerrado || echo ABIERTO)" cerrado
 
 echo "4) Observabilidad conectada (consulta a Prometheus dentro del cluster)"
-T=$(k exec prometheus-0 -- wget -qO- http://localhost:9090/api/v1/targets 2>&1)
+T=""; for _ in $(seq 1 30); do   # el primer scrape tarda unos segundos tras arrancar Prometheus
+  T=$(k exec prometheus-0 -- wget -qO- http://localhost:9090/api/v1/targets 2>&1); [[ "$T" == *'"health":"up"'* ]] && break; sleep 2; done
 has "Prometheus ve al order book (target up)" "$T" '"health":"up"'
 R=$(k exec prometheus-0 -- wget -qO- http://localhost:9090/api/v1/rules 2>&1)
 N=$(grep -o '"type":"alerting"' <<<"$R" | wc -l | tr -d ' ')
 [ "$N" = 13 ] && pass "13 alertas cargadas" || bad "13 alertas cargadas" "$N"
 has "Grafana saludable por el ingress" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/health")" '"database": "ok"'
 has "dashboard provisionado" "$(curl -s -m 10 -H "Host: $GRAFANA_HOST" "http://$API_ADDR/api/search?query=Order")" orderbook-overview
+
+echo "5) Historial en Postgres (order book -> Postgres a través de las NetworkPolicy)"
+H=""; for _ in $(seq 1 60); do H=$(api "/audit/history/$AL"); [[ "$H" == *'"lag":0'* ]] && break; sleep 2; done
+has "el historial alcanzó al journal (lag 0)" "$H" '"lag":0'
+has "saldo del historial == saldo del motor" "$H" '"consistent":true'
+
+echo "6) ¿El CNI de este cluster APLICA las NetworkPolicy? (informativo: no cuenta como fallo)"
+k delete pod np-probe --ignore-not-found >/dev/null 2>&1
+k apply -f - >/dev/null <<YAML
+apiVersion: v1
+kind: Pod
+metadata: {name: np-probe}
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+  containers:
+    - name: probe
+      image: busybox:1.36
+      command: [sh, -c, "nc -zw3 postgres 5432 && echo ALCANZABLE || echo BLOQUEADO"]
+      securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+YAML
+k wait --for=jsonpath='{.status.phase}'=Succeeded pod/np-probe --timeout=90s >/dev/null 2>&1
+NP=$(k logs np-probe 2>/dev/null | tail -1); k delete pod np-probe --ignore-not-found >/dev/null 2>&1
+case "$NP" in
+  BLOQUEADO)   echo "  [INFO]  un pod sin etiqueta NO alcanza a Postgres: las NetworkPolicy se APLICAN";;
+  ALCANZABLE)  echo "  [INFO]  un pod sin etiqueta SÍ alcanza a Postgres: este CNI NO aplica NetworkPolicy (declaradas pero sin efecto aquí)";;
+  *)           echo "  [INFO]  no se pudo determinar (resultado: '$NP')";;
+esac
 
 echo
 [ "$FAILS" = 0 ] && { echo "SMOKE OK"; exit 0; } || { echo "SMOKE: $FAILS fallos"; exit 1; }
