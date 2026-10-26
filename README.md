@@ -63,8 +63,8 @@ CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging               # exige confirmar 
 | Las políticas detectan imagen `latest`, réplicas ≠ 1 en el escritor y Secrets en git (mutaciones) | ✅ ejecutado |
 | Despliegue real en kind (CI): cluster, ingress, imagen, 4 rollouts | ✅ ejecutado |
 | Humo 19/19: tráfico por el ingress, `/metrics` cerrado, 13 alertas, Grafana, historial, NetworkPolicy aplicadas | ✅ ejecutado |
-| Caos: crash del pod → estado idéntico, **RTO 4.1 s** (journal casi vacío); Postgres caído → el mercado sigue y el historial se reconcilia | ✅ ejecutado |
-| Ejecución en Docker Desktop (laptop del autor): despliegue + humo 19/19 | ✅ ejecutado · caos y carga: ⏳ pendientes |
+| Caos: crash del pod → estado idéntico, **RTO 4.1 s en CI / 10.7 s en la laptop** (journal casi vacío); Postgres caído → el mercado sigue y el historial se reconcilia | ✅ ejecutado |
+| Ejecución en Docker Desktop (laptop del autor): despliegue + humo 19/19 | ✅ ejecutado · caos ✅ (RTO 10.7 s) · carga: ⏳ pendiente |
 | Staging y prod | plantillas validadas estáticamente; no desplegadas |
 
 Detalle, enlaces a cada ejecución y lo que **no** se probó: [`docs/EVIDENCIA.md`](docs/EVIDENCIA.md).

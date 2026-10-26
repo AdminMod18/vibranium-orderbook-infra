@@ -39,7 +39,7 @@ los recursos se ajustan por overlay sin tocar la base.
 
 | Falla | Comportamiento esperado | Mecanismo | Verificación |
 |---|---|---|---|
-| El proceso/pod del order book muere | Se recrea solo; reproduce el journal; **mismo estado** | `StatefulSet` + PVC con el journal; `startupProbe` tolera hasta 5 min de reproducción | `scripts/chaos.sh kill-pod` ✅ (estado idéntico; RTO 4.1 s con journal casi vacío) |
+| El proceso/pod del order book muere | Se recrea solo; reproduce el journal; **mismo estado** | `StatefulSet` + PVC con el journal; `startupProbe` tolera hasta 5 min de reproducción | `scripts/chaos.sh kill-pod` ✅ (estado idéntico; RTO 4.1 s en CI y 10.7 s en laptop, journal casi vacío) |
 | El pod arranca pero aún no está listo | No recibe tráfico | `readinessProbe` sobre `/readyz` (secuenciador activo) | smoke ✅ |
 | El proceso se cuelga | Se reinicia el contenedor | `livenessProbe` sobre `/healthz` | — |
 | Postgres cae | El **mercado sigue**; el historial responde 503 y se reconcilia al volver | diseño de la app (el journal es la verdad) | `scripts/chaos.sh postgres-down` ✅ |
@@ -48,7 +48,7 @@ los recursos se ajustan por overlay sin tocar la base.
 
 **Limitaciones (hechos):**
 - **No hay alta disponibilidad del escritor.** Hay *recuperación rápida* (reproducir el journal tarda ≈ 8 s por millón de registros),
-  durante la cual no se aceptan órdenes. RTO = tiempo de arranque + reproducción. **Medido: 4.1 s** con el journal casi vacío (un solo dato; ver `EVIDENCIA.md`); con un journal grande hay que sumar ≈ 8 s por millón de registros.
+  durante la cual no se aceptan órdenes. RTO = tiempo de arranque + reproducción. **Medido: 4.1 s (CI) y 10.7 s (laptop con Docker Desktop)** con el journal casi vacío (una muestra por entorno; ver `EVIDENCIA.md`); con un journal grande hay que sumar ≈ 8 s por millón de registros.
 - El volumen del journal está atado a un nodo en kind (`local-path`). Si el nodo muere, el pod no se mueve solo. En un cluster
   cloud, un volumen de red con replicación (por zona) resuelve la parte del volumen; la HA del escritor requeriría una réplica
   seguidora, que **no está implementada** (ver `DECISIONES.md` de la app).

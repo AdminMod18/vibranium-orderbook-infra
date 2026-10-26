@@ -19,8 +19,13 @@ para poder comprobarla. **No es una prueba de rendimiento** y **no corrió en un
 | Entorno | Windows + Docker Desktop, `kind v0.33.0`, nodo `kindest/node:v1.37.0`, scripts ejecutados desde Git Bash |
 | `kind-up.sh` → `build-image.sh` → `deploy.sh local` | ✅ cluster, ingress, imagen y 4 pods `Running` (3 PVC enlazados) en ~34 s tras construir la imagen |
 | `smoke.sh` | ✅ **19/19** (`SMOKE OK`), incluido el historial con lag 0 y NetworkPolicy aplicadas |
-| Caos (`kill-pod`, `postgres-down`) | ⏳ pendiente de ejecutar en esta máquina |
+| Caos `kill-pod` | ✅ pod recreado (uid distinto); saldos, orden parcial con su trade y auditoría **idénticos**; vuelve a aceptar órdenes. **RTO = 10.7 s** |
+| Caos `postgres-down` | ✅ el mercado sigue (201), `/readyz` 200, historial 503, y al volver `lag 0` y saldos consistentes |
 | Carga con JMeter a través del ingress | ⏳ pendiente |
+
+**RTO en la laptop (10.7 s) vs CI (4.1 s):** una sola muestra en cada entorno, mismo journal casi vacío (10 registros). La diferencia **no está explicada**;
+hipótesis (no verificadas): arranque de contenedores más lento en Docker Desktop/WSL2 y CPU compartida con el resto de aplicaciones del equipo. Para el RTO conviene
+reportar el **rango observado (4.1-10.7 s)** y no uno solo; con un journal grande se suma ≈ 8 s por millón de registros.
 
 **Problema real encontrado solo en Windows (y corregido):** `build-image.sh` falló con `unable to prepare context: path ".../vibranium-orderbook-meli" not found`.
 La causa era `MSYS_NO_PATHCONV=1` (necesario para otros comandos): hacía que `docker.exe` recibiera una ruta estilo `/c/Users/...`, que no entiende.
