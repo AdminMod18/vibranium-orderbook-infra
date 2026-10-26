@@ -1,0 +1,40 @@
+# Ambiente PROD. Plantilla validada estáticamente; no probada contra un cluster real. Sin TLS ni gestor de
+# certificados (siguiente paso documentado en docs/PLATAFORMA.md §8). Secret: scripts/create-secret.sh prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vibranium-prod
+resources:
+  - ../../base
+  - namespace.yaml
+images:
+  - name: ghcr.io/adminmod18/vibranium-orderbook-meli
+    newTag: v1.0.0                    # SIEMPRE una versión inmutable; actualizar al publicar cada release
+patches:
+  - target: {kind: Ingress, name: orderbook}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: orderbook.example.com}
+  - target: {kind: Ingress, name: grafana}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: grafana.example.com}
+  - target: {kind: StatefulSet, name: orderbook}
+    patch: |-
+      - {op: replace, path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage, value: 20Gi}   # ~356 B/registro: ver alertas JournalDisk*
+  - patch: |-                         # strategic merge: se combina por nombre de contenedor/variable, sin depender de posiciones
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata: {name: orderbook}
+      spec:
+        template:
+          spec:
+            containers:
+              - name: orderbook
+                env:
+                  - {name: GOMEMLIMIT, value: 6GiB}
+                resources:
+                  requests: {cpu: "2", memory: 4Gi}
+                  limits: {memory: 8Gi}
+  - target: {kind: StatefulSet, name: postgres}
+    patch: |-
+      - {op: replace, path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage, value: 20Gi}
+      - {op: replace, path: /spec/template/spec/containers/0/resources/requests/memory, value: 1Gi}
+      - {op: replace, path: /spec/template/spec/containers/0/resources/limits/memory, value: 2Gi}

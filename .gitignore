@@ -1,0 +1,5 @@
+# Secretos y artefactos locales: nunca al repositorio
+*.secret
+secrets/
+.kind-http-port
+/tmp/

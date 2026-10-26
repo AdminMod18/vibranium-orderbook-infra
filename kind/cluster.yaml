@@ -1,0 +1,20 @@
+# Cluster local de un solo nodo. El puerto del host (HTTP_PORT, 8080 por defecto) entra por ingress-nginx:
+#   API      http://localhost:8080
+#   Grafana  http://grafana.localtest.me:8080  (localtest.me resuelve a 127.0.0.1)
+# scripts/kind-up.sh sustituye hostPort si se define HTTP_PORT.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: vibranium
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 8080
+        listenAddress: "127.0.0.1"   # solo esta máquina; cambiar a 0.0.0.0 para exponerlo a la red
+        protocol: TCP

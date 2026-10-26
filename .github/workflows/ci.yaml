@@ -1,0 +1,53 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      app_ref:
+        description: "Rama/tag del repo de la app a probar (por defecto main)"
+        default: main
+
+jobs:
+  # Rápido y sin cluster: compila cada overlay, valida el esquema de Kubernetes y las políticas del repo.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar kubeconform (versión fijada)
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | sudo tar xz -C /usr/local/bin kubeconform
+      - run: scripts/validate.sh
+
+  # Prueba de extremo a extremo REAL: cluster kind, ingress, imagen construida del repo de la app, humo y caos.
+  e2e:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: AdminMod18/vibranium-orderbook-meli
+          ref: ${{ inputs.app_ref || 'main' }}
+          path: app
+      - name: Cluster kind + ingress-nginx
+        run: scripts/kind-up.sh
+      - name: Construir y cargar la imagen de la app
+        run: APP_DIR="$PWD/app" scripts/build-image.sh
+      - name: Desplegar ambiente local
+        run: scripts/deploy.sh local
+      - name: Prueba de humo (ingress, ciclo de órdenes, observabilidad)
+        run: scripts/smoke.sh
+      - name: Caos 1 - crash del pod bajo estado no trivial
+        run: scripts/chaos.sh kill-pod
+      - name: Caos 2 - Postgres caído (el mercado sigue)
+        run: scripts/chaos.sh postgres-down
+      - name: Diagnóstico si algo falló
+        if: failure()
+        run: |
+          kubectl -n vibranium-local get pods,pvc,ingress -o wide || true
+          kubectl -n vibranium-local describe pods || true
+          kubectl -n vibranium-local logs statefulset/orderbook --tail=200 || true
+          kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=100 || true

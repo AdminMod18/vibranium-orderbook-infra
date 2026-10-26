@@ -1,0 +1,30 @@
+# Única entrada de tráfico: la API pública (8080) y Grafana. /metrics y pprof (9102) y Prometheus NO se publican.
+# Los hosts son marcadores: cada overlay fija los suyos (patch JSON6902).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orderbook
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "10"     # la API tiene su propio plazo por request (2 s)
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-body-size: 64k         # las órdenes son JSON diminutos; acota abusos
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: orderbook.example.invalid
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: orderbook, port: {name: http}}}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: grafana.example.invalid
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: grafana, port: {name: http}}}}

@@ -1,0 +1,65 @@
+# Historial (modelo de lectura). El matching NO depende de él: si cae, el mercado sigue y el historial se pone al día solo.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: {app.kubernetes.io/name: postgres}
+spec:
+  selector: {app.kubernetes.io/name: postgres}
+  ports:
+    - {name: pg, port: 5432, targetPort: pg}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: {app.kubernetes.io/name: postgres}
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: postgres}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: postgres}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70                       # `postgres` en la imagen alpine
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - {name: pg, containerPort: 5432}
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: vibranium-secrets, key: password}}
+            - {name: POSTGRES_DB, value: orderbook}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}   # subdirectorio: la raíz del volumen trae lost+found
+          readinessProbe:
+            exec: {command: [pg_isready, -U, postgres, -d, orderbook]}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec: {command: [pg_isready, -U, postgres, -d, orderbook]}
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: {requests: {storage: 5Gi}}

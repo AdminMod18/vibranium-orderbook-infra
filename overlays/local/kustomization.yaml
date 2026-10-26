@@ -1,0 +1,25 @@
+# Ambiente LOCAL (kind). Imagen construida en la máquina y cargada con `kind load` (sin registro).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vibranium-local
+resources:
+  - ../../base
+  - namespace.yaml
+components:
+  - ../../components/demo-secrets      # credenciales de demo (solo local)
+images:
+  - name: ghcr.io/adminmod18/vibranium-orderbook-meli
+    newName: vibranium-orderbook-meli
+    newTag: dev
+patches:
+  - target: {kind: Ingress, name: orderbook}
+    patch: |-
+      - {op: remove, path: /spec/rules/0/host}     # sin host: http://localhost:8080 llega a la API (JMeter, curl) sin tocar el archivo hosts
+  - target: {kind: Ingress, name: grafana}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: grafana.localtest.me}
+  - target: {kind: StatefulSet, name: orderbook}
+    patch: |-
+      - {op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: IfNotPresent}
+      - {op: replace, path: /spec/template/spec/containers/0/resources/requests/cpu, value: 500m}      # laptops: no reservar un núcleo entero
+      - {op: replace, path: /spec/template/spec/containers/0/resources/requests/memory, value: 1Gi}

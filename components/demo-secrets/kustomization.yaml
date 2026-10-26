@@ -1,0 +1,11 @@
+# SOLO para ambientes de demo/local: credenciales conocidas y públicas. Staging/prod NO incluyen este componente:
+# su Secret `vibranium-secrets` se crea fuera de git (scripts/create-secret.sh).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+secretGenerator:
+  - name: vibranium-secrets
+    literals:
+      - password=orderbook
+      - grafana-admin-password=admin
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,25 @@
+# BASE reutilizable: todo lo común a todos los ambientes. Los overlays solo cambian lo que de verdad difiere
+# (namespace, imagen, host, tamaños, secretos). No se despliega directamente.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - orderbook.yaml
+  - postgres.yaml
+  - prometheus.yaml
+  - grafana.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+configMapGenerator:        # con sufijo hash: cambiar un archivo reinicia (roll) los pods que lo usan
+  - name: prometheus-config
+    files:
+      - observability/prometheus.yml
+      - observability/alerts.yml
+  - name: grafana-provisioning
+    files:
+      - datasource.yml=observability/grafana/datasources/prometheus.yml
+      - dashboards.yml=observability/grafana/dashboards.yml
+  - name: grafana-dashboards
+    files:
+      - observability/grafana/orderbook.json
+labels:
+  - pairs: {app.kubernetes.io/part-of: vibranium}

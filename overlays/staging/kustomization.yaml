@@ -1,0 +1,18 @@
+# Ambiente STAGING. Plantilla validada estáticamente (kustomize + kubeconform); no probada contra un cluster real.
+# El Secret `vibranium-secrets` NO está en git: créelo con scripts/create-secret.sh staging
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: vibranium-staging
+resources:
+  - ../../base
+  - namespace.yaml
+images:
+  - name: ghcr.io/adminmod18/vibranium-orderbook-meli
+    newTag: main                      # staging sigue la rama principal (etiqueta mutable, aceptable aquí)
+patches:
+  - target: {kind: Ingress, name: orderbook}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: orderbook.staging.example.com}
+  - target: {kind: Ingress, name: grafana}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: grafana.staging.example.com}

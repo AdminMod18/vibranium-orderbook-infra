@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vibranium-local
+  labels:
+    # Pod Security Standards "restricted": el cluster RECHAZA pods que no sean no-root, sin privilegios y con seccomp.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
