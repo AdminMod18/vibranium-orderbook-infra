@@ -1,0 +1,21 @@
+# Permisos MÍNIMOS para que Prometheus lea cAdvisor (CPU/memoria/red por pod) a través del API server: solo lectura de nodos y de sus métricas.
+# El rol es de clúster (los nodos no pertenecen a un namespace); su binding lleva un nombre por ambiente (lo fija cada overlay).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vibranium-prometheus
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [nodes/metrics, nodes/proxy]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vibranium-prometheus
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: vibranium-prometheus}
+subjects:
+  - {kind: ServiceAccount, name: prometheus}   # kustomize lo reemplaza por el namespace del ambiente

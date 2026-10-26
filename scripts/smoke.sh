@@ -52,12 +52,16 @@ prom_has() {  # $1 = consulta PromQL sin caracteres especiales; espera hasta 60 
     [[ "$r" == *'"result":[{'* ]] && return 0; sleep 2; done; return 1; }
 for m in up nginx_ingress_controller_requests nginx_ingress_controller_request_duration_seconds_count \
          nginx_ingress_controller_nginx_process_connections process_start_time_seconds process_cpu_seconds_total \
-         process_resident_memory_bytes process_open_fds go_goroutines orderbook_http_requests_total; do
+         process_resident_memory_bytes process_open_fds go_goroutines orderbook_http_requests_total \
+         container_cpu_usage_seconds_total container_memory_working_set_bytes container_network_receive_bytes_total \
+         kube_pod_info kube_pod_status_ready kube_pod_container_status_restarts_total kube_pod_container_resource_limits; do
   prom_has "$m" && pass "métrica disponible: $m" || bad "métrica disponible: $m" "sin datos en Prometheus"
 done
-UPI=""; for _ in $(seq 1 30); do   # up{job="ingress-nginx"} debe VALER 1 (no basta con que exista el target)
-  UPI=$(k exec prometheus-0 -- wget -qO- 'http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22ingress-nginx%22%7D' 2>&1); [[ "$UPI" == *',"1"]'* ]] && break; sleep 2; done
-has "Prometheus alcanza el ingress (up{job=ingress-nginx} = 1)" "$UPI" ',"1"]'
+for J in ingress-nginx cadvisor kube-state-metrics; do   # cada job debe VALER up=1 (no basta con que exista el target)
+  UPI=""; for _ in $(seq 1 30); do
+    UPI=$(k exec prometheus-0 -- wget -qO- "http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22$J%22%7D" 2>&1); [[ "$UPI" == *',"1"]'* ]] && break; sleep 2; done
+  has "Prometheus alcanza $J (up = 1)" "$UPI" ',"1"]'
+done
 
 echo "5) Historial en Postgres (order book -> Postgres a través de las NetworkPolicy)"
 H=""; for _ in $(seq 1 60); do H=$(api "/audit/history/$AL"); [[ "$H" == *'"lag":0'* ]] && break; sleep 2; done

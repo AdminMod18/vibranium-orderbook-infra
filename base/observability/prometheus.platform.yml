@@ -14,3 +14,18 @@ scrape_configs:
   - job_name: ingress-nginx                # métricas del controlador (Service creado en platform/ingress-nginx)
     static_configs:
       - targets: ["ingress-nginx-controller-metrics.ingress-nginx.svc.cluster.local:10254"]
+  - job_name: kube-state-metrics           # estado de pods/StatefulSets: reinicios, listo, límites y requests declarados
+    static_configs:
+      - targets: ["kube-state-metrics:8080"]
+  - job_name: cadvisor                     # CPU, memoria y red de cada contenedor, leídas del kubelet a través del API server
+    scheme: https
+    tls_config: {ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+    authorization: {credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token}
+    kubernetes_sd_configs: [{role: node}]
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor

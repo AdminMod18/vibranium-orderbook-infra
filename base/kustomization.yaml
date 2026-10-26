@@ -7,6 +7,8 @@ resources:
   - postgres.yaml
   - prometheus.yaml
   - grafana.yaml
+  - kube-state-metrics.yaml
+  - rbac.yaml
   - ingress.yaml
   - networkpolicy.yaml
 configMapGenerator:        # con sufijo hash: cambiar un archivo reinicia (roll) los pods que lo usan

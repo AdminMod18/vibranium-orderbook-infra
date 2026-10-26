@@ -44,6 +44,12 @@ for d in docs:
         if d["spec"]["replicas"] != 1:
             errors.append(f"{name}: el escritor es de UN solo escritor (replicas debe ser 1)")
 
+for d in docs:
+    if d["kind"] in ("RoleBinding", "ClusterRoleBinding"):
+        for sub in d.get("subjects", []):
+            if sub.get("kind") == "ServiceAccount" and sub.get("namespace") != f"vibranium-{env}":
+                errors.append(f'{d["kind"]}/{d["metadata"]["name"]}: el sujeto {sub["name"]} apunta al namespace {sub.get("namespace")!r}, no a vibranium-{env}')
+
 kinds = {(d["kind"], d["metadata"]["name"]) for d in docs}
 if not any(k == "NetworkPolicy" for k, _ in kinds):
     errors.append("faltan NetworkPolicy")

@@ -86,8 +86,8 @@ OB = '{ingress="orderbook"}'
 
 text("**Plataforma (Kubernetes).** Lo que solo existe en el cluster: la **entrada de tráfico** (ingress-nginx) y el **pod** del order book. "
      "El dashboard de la aplicación (órdenes, latencia, cola, journal) es el otro panel de esta carpeta. "
-     "Limitación: no hay `kube-state-metrics` ni cAdvisor; el estado de los pods y el uso de CPU/memoria de contenedor se consultan con `kubectl`, "
-     "y la sección 2 usa las métricas del propio proceso como equivalente.", h=3)
+     "Las secciones 2 y 3 salen del cluster: **cAdvisor** (CPU, memoria y red reales de cada contenedor) y **kube-state-metrics** (reinicios, estado y los límites declarados). "
+     "El namespace se elige arriba (ambiente).", h=3)
 
 row("1 · Entrada de tráfico (ingress-nginx)", "Todo el tráfico de clientes y de JMeter pasa por aquí antes de llegar al pod.")
 stat("Ingress", 'up{job="ingress-nginx"}', "none", steps((None, "red"), (1, "green")), "1 = Prometheus alcanza las métricas del controlador de ingress.", mappings=UP_MAP)
@@ -111,7 +111,40 @@ ts("Conciliación de tráfico: ingress vs servidor", [
     tgt(f"sum(rate(orderbook_http_requests_total[{R}]))", "peticiones contadas por el servidor", "B")], "reqps",
    "Deben coincidir (el servidor no cuenta las que el ingress rechaza o corta antes). Una brecha sostenida indica peticiones perdidas en la entrada.")
 
-row("2 · Pod del order book (métricas del proceso)", "Equivalente de plataforma para un único escritor: ¿arranca, se reinicia, cuánto consume?")
+NSQ = '{namespace="$namespace"}'
+CT = '{namespace="$namespace",container!=""}'
+OBP = '{namespace="$namespace",pod="orderbook-0",container="orderbook"}'
+
+row("2 · Pods del namespace (cAdvisor + kube-state-metrics)", "Rendimiento real de cada pod medido por el cluster, no por la aplicación.")
+stat("Pods listos", f'sum(kube_pod_status_ready{{namespace="$namespace",condition="true"}})', "short", steps((None, "red"), (1, "yellow"), (4, "green")),
+     "Pods en estado Ready. Se esperan 5 en el cluster local (order book, Postgres, Prometheus, Grafana y kube-state-metrics).", decimals=0)
+stat("Reinicios de contenedores", f"sum(kube_pod_container_status_restarts_total{NSQ})", "short", steps((None, "green"), (1, "yellow"), (5, "red")),
+     "Reinicios acumulados de contenedores (crash, OOM o sonda de vida fallida). Un pod recreado por el StatefulSet NO suma aquí: es un pod nuevo.", decimals=0)
+stat("CPU del namespace", f"sum(rate(container_cpu_usage_seconds_total{CT}[{R}]))", "short", desc="Núcleos que consumen todos los pods del ambiente.", decimals=2)
+stat("Memoria del namespace", f"sum(container_memory_working_set_bytes{CT})", "bytes", desc="Memoria en uso (working set) de todos los pods; es la que cuenta el límite del contenedor.")
+stat("Order book: memoria", f"container_memory_working_set_bytes{OBP}", "bytes", steps((None, "green"), (2.5 * 1024**3, "yellow"), (3.5 * 1024**3, "red")),
+     "Memoria del contenedor del order book. Su límite es 4 GiB; al pasarlo, el kernel lo mata (OOM).")
+stat("Order book: CPU (núcleos)", f"rate(container_cpu_usage_seconds_total{OBP}[{R}])", "short", desc="Núcleos que consume el contenedor del order book.", decimals=2)
+ts("CPU por pod (núcleos)", [tgt(f"sum by (pod) (rate(container_cpu_usage_seconds_total{CT}[{R}]))", "{{pod}}")], "short",
+   "Quién consume CPU durante la prueba. El order book es un solo escritor: se espera que domine y que se acerque a 1-2 núcleos.", stack=True)
+ts("Memoria por pod (working set)", [tgt(f"sum by (pod) (container_memory_working_set_bytes{CT})", "{{pod}}")], "bytes",
+   "Memoria en uso de cada pod. Crece con el libro y la ventana de idempotencia.", stack=True)
+ts("Order book: memoria frente a su request y su límite", [
+    tgt(f"container_memory_working_set_bytes{OBP}", "uso (working set)", "A"),
+    tgt(f'kube_pod_container_resource_requests{{namespace="$namespace",pod="orderbook-0",container="orderbook",resource="memory"}}', "request (reservado)", "B"),
+    tgt(f'kube_pod_container_resource_limits{{namespace="$namespace",pod="orderbook-0",container="orderbook",resource="memory"}}', "límite (OOM al superarlo)", "C")], "bytes",
+   "El margen entre el uso y el límite es lo que protege de un OOM. GOMEMLIMIT hace que el GC apriete antes de llegar al límite.")
+ts("Order book: CPU frente a su request", [
+    tgt(f"rate(container_cpu_usage_seconds_total{OBP}[{R}])", "uso (núcleos)", "A"),
+    tgt(f'kube_pod_container_resource_requests{{namespace="$namespace",pod="orderbook-0",container="orderbook",resource="cpu"}}', "request (reservado)", "B")], "short",
+   "Sin límite de CPU a propósito (el throttling añadiría latencia al secuenciador); el request solo reserva capacidad en el planificador.")
+ts("Tráfico de red por pod", [tgt(f"sum by (pod) (rate(container_network_receive_bytes_total{NSQ}[{R}]))", "{{pod}} ↓ recibido", "A"),
+                              tgt(f"sum by (pod) (rate(container_network_transmit_bytes_total{NSQ}[{R}]))", "{{pod}} ↑ enviado", "B")], "Bps",
+   "Bytes por segundo que entran y salen de cada pod. El order book recibe las órdenes y envía las respuestas; Prometheus recibe las métricas.")
+ts("Reinicios de contenedores por pod", [tgt(f"sum by (pod) (kube_pod_container_status_restarts_total{NSQ})", "{{pod}}")], "short",
+   "Debe ser plano. Un escalón indica un crash o un OOM de ese pod.")
+
+row("3 · Proceso del order book (métricas de la propia aplicación)", "Equivalente de plataforma para un único escritor: ¿arranca, se reinicia, cuánto consume?")
 stat("Tiempo en marcha", 'time() - process_start_time_seconds{job="orderbook"}', "s", steps((None, "yellow"), (60, "green")),
      "Desde el último arranque del proceso. Amarillo = arrancó hace menos de 1 minuto (recién recreado).", decimals=0)
 stat("Reinicios (1 h)", 'changes(process_start_time_seconds{job="orderbook"}[1h])', "short", steps((None, "green"), (1, "yellow"), (3, "red")),
@@ -129,7 +162,10 @@ ts("Objetivos de Prometheus (1 = arriba)", [tgt("up", "{{job}}")], "none", "Si u
 DASH = {"uid": "plataforma-k8s", "title": "Vibranium — Plataforma (Kubernetes)", "tags": ["vibranium", "kubernetes", "plataforma"],
         "timezone": "browser", "schemaVersion": 39, "version": 1, "refresh": "5s", "editable": True, "time": {"from": "now-15m", "to": "now"},
         "graphTooltip": 1, "annotations": {"list": []}, "links": [],
-        "templating": {"list": [{"name": "rate", "label": "Ventana de cálculo", "type": "custom", "query": "30s,1m,5m",
+        "templating": {"list": [
+            {"name": "namespace", "label": "Ambiente (namespace)", "type": "query", "datasource": DS, "query": "label_values(kube_pod_info, namespace)",
+             "refresh": 2, "sort": 1, "hide": 0, "includeAll": False, "multi": False, "current": {}, "options": []},
+            {"name": "rate", "label": "Ventana de cálculo", "type": "custom", "query": "30s,1m,5m",
                                  "current": {"selected": True, "text": "1m", "value": "1m"},
                                  "options": [{"selected": False, "text": "30s", "value": "30s"}, {"selected": True, "text": "1m", "value": "1m"},
                                              {"selected": False, "text": "5m", "value": "5m"}], "hide": 0}]},

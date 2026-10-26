@@ -10,6 +10,9 @@ images:
   - name: ghcr.io/adminmod18/vibranium-orderbook-meli
     newTag: main                      # staging sigue la rama principal (etiqueta mutable, aceptable aquí)
 patches:
+  - target: {kind: ClusterRoleBinding, name: vibranium-prometheus}
+    patch: |-
+      - {op: replace, path: /metadata/name, value: vibranium-prometheus-staging}
   - target: {kind: Ingress, name: orderbook}
     patch: |-
       - {op: replace, path: /spec/rules/0/host, value: orderbook.staging.example.com}

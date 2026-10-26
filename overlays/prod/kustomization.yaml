@@ -10,6 +10,9 @@ images:
   - name: ghcr.io/adminmod18/vibranium-orderbook-meli
     newTag: v1.0.0                    # SIEMPRE una versión inmutable; actualizar al publicar cada release
 patches:
+  - target: {kind: ClusterRoleBinding, name: vibranium-prometheus}
+    patch: |-
+      - {op: replace, path: /metadata/name, value: vibranium-prometheus-prod}
   - target: {kind: Ingress, name: orderbook}
     patch: |-
       - {op: replace, path: /spec/rules/0/host, value: orderbook.example.com}

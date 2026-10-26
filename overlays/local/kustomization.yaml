@@ -12,6 +12,9 @@ images:
     newName: vibranium-orderbook-meli
     newTag: dev
 patches:
+  - target: {kind: ClusterRoleBinding, name: vibranium-prometheus}
+    patch: |-
+      - {op: replace, path: /metadata/name, value: vibranium-prometheus-local}
   - target: {kind: Ingress, name: orderbook}
     patch: |-
       - {op: remove, path: /spec/rules/0/host}     # sin host: http://localhost:8080 llega a la API (JMeter, curl) sin tocar el archivo hosts

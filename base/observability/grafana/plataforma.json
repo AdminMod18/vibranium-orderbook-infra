@@ -23,6 +23,23 @@
  "templating": {
   "list": [
    {
+    "name": "namespace",
+    "label": "Ambiente (namespace)",
+    "type": "query",
+    "datasource": {
+     "type": "prometheus",
+     "uid": "prometheus"
+    },
+    "query": "label_values(kube_pod_info, namespace)",
+    "refresh": 2,
+    "sort": 1,
+    "hide": 0,
+    "includeAll": false,
+    "multi": false,
+    "current": {},
+    "options": []
+   },
+   {
     "name": "rate",
     "label": "Ventana de cálculo",
     "type": "custom",
@@ -67,7 +84,7 @@
    "transparent": true,
    "options": {
     "mode": "markdown",
-    "content": "**Plataforma (Kubernetes).** Lo que solo existe en el cluster: la **entrada de tráfico** (ingress-nginx) y el **pod** del order book. El dashboard de la aplicación (órdenes, latencia, cola, journal) es el otro panel de esta carpeta. Limitación: no hay `kube-state-metrics` ni cAdvisor; el estado de los pods y el uso de CPU/memoria de contenedor se consultan con `kubectl`, y la sección 2 usa las métricas del propio proceso como equivalente."
+    "content": "**Plataforma (Kubernetes).** Lo que solo existe en el cluster: la **entrada de tráfico** (ingress-nginx) y el **pod** del order book. El dashboard de la aplicación (órdenes, latencia, cola, journal) es el otro panel de esta carpeta. Las secciones 2 y 3 salen del cluster: **cAdvisor** (CPU, memoria y red reales de cada contenedor) y **kube-state-metrics** (reinicios, estado y los límites declarados). El namespace se elige arriba (ambiente)."
    }
   },
   {
@@ -752,8 +769,8 @@
   {
    "id": 13,
    "type": "row",
-   "title": "2 · Pod del order book (métricas del proceso)",
-   "description": "Equivalente de plataforma para un único escritor: ¿arranca, se reinicia, cuánto consume?",
+   "title": "2 · Pods del namespace (cAdvisor + kube-state-metrics)",
+   "description": "Rendimiento real de cada pod medido por el cluster, no por la aplicación.",
    "collapsed": false,
    "panels": [],
    "gridPos": {
@@ -766,6 +783,818 @@
   {
    "id": 14,
    "type": "stat",
+   "title": "Pods listos",
+   "description": "Pods en estado Ready. Se esperan 5 en el cluster local (order book, Postgres, Prometheus, Grafana y kube-state-metrics).",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(kube_pod_status_ready{namespace=\"$namespace\",condition=\"true\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "red",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 1
+       },
+       {
+        "color": "green",
+        "value": 4
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 15,
+   "type": "stat",
+   "title": "Reinicios de contenedores",
+   "description": "Reinicios acumulados de contenedores (crash, OOM o sonda de vida fallida). Un pod recreado por el StatefulSet NO suma aquí: es un pod nuevo.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(kube_pod_container_status_restarts_total{namespace=\"$namespace\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 1
+       },
+       {
+        "color": "red",
+        "value": 5
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 0
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 16,
+   "type": "stat",
+   "title": "CPU del namespace",
+   "description": "Núcleos que consumen todos los pods del ambiente.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container!=\"\"}[$rate]))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 2
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 17,
+   "type": "stat",
+   "title": "Memoria del namespace",
+   "description": "Memoria en uso (working set) de todos los pods; es la que cuenta el límite del contenedor.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\",container!=\"\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 18,
+   "type": "stat",
+   "title": "Order book: memoria",
+   "description": "Memoria del contenedor del order book. Su límite es 4 GiB; al pasarlo, el kernel lo mata (OOM).",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "container_memory_working_set_bytes{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "yellow",
+        "value": 2684354560.0
+       },
+       {
+        "color": "red",
+        "value": 3758096384.0
+       }
+      ]
+     },
+     "mappings": []
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 19,
+   "type": "stat",
+   "title": "Order book: CPU (núcleos)",
+   "description": "Núcleos que consume el contenedor del order book.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 25,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\"}[$rate])",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "blue",
+        "value": null
+       }
+      ]
+     },
+     "mappings": [],
+     "decimals": 2
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "area",
+    "textMode": "value",
+    "justifyMode": "center"
+   }
+  },
+  {
+   "id": 20,
+   "type": "timeseries",
+   "title": "CPU por pod (núcleos)",
+   "description": "Quién consume CPU durante la prueba. El order book es un solo escritor: se espera que domine y que se acerque a 1-2 núcleos.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 29,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",container!=\"\"}[$rate]))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{pod}}",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "normal",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 21,
+   "type": "timeseries",
+   "title": "Memoria por pod (working set)",
+   "description": "Memoria en uso de cada pod. Crece con el libro y la ventana de idempotencia.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 29,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"$namespace\",container!=\"\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{pod}}",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "normal",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 22,
+   "type": "timeseries",
+   "title": "Order book: memoria frente a su request y su límite",
+   "description": "El margen entre el uso y el límite es lo que protege de un OOM. GOMEMLIMIT hace que el GC apriete antes de llegar al límite.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 37,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "container_memory_working_set_bytes{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "uso (working set)",
+     "instant": false,
+     "range": true
+    },
+    {
+     "refId": "B",
+     "expr": "kube_pod_container_resource_requests{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\",resource=\"memory\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "request (reservado)",
+     "instant": false,
+     "range": true
+    },
+    {
+     "refId": "C",
+     "expr": "kube_pod_container_resource_limits{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\",resource=\"memory\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "límite (OOM al superarlo)",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "bytes",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "none",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 23,
+   "type": "timeseries",
+   "title": "Order book: CPU frente a su request",
+   "description": "Sin límite de CPU a propósito (el throttling añadiría latencia al secuenciador); el request solo reserva capacidad en el planificador.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 37,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "rate(container_cpu_usage_seconds_total{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\"}[$rate])",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "uso (núcleos)",
+     "instant": false,
+     "range": true
+    },
+    {
+     "refId": "B",
+     "expr": "kube_pod_container_resource_requests{namespace=\"$namespace\",pod=\"orderbook-0\",container=\"orderbook\",resource=\"cpu\"}",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "request (reservado)",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "none",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 24,
+   "type": "timeseries",
+   "title": "Tráfico de red por pod",
+   "description": "Bytes por segundo que entran y salen de cada pod. El order book recibe las órdenes y envía las respuestas; Prometheus recibe las métricas.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 45,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (pod) (rate(container_network_receive_bytes_total{namespace=\"$namespace\"}[$rate]))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{pod}} ↓ recibido",
+     "instant": false,
+     "range": true
+    },
+    {
+     "refId": "B",
+     "expr": "sum by (pod) (rate(container_network_transmit_bytes_total{namespace=\"$namespace\"}[$rate]))",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{pod}} ↑ enviado",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "Bps",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "none",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 25,
+   "type": "timeseries",
+   "title": "Reinicios de contenedores por pod",
+   "description": "Debe ser plano. Un escalón indica un crash o un OOM de ese pod.",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prometheus"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 45,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (pod) (kube_pod_container_status_restarts_total{namespace=\"$namespace\"})",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prometheus"
+     },
+     "legendFormat": "{{pod}}",
+     "instant": false,
+     "range": true
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 15,
+      "showPoints": "never",
+      "spanNulls": true,
+      "drawStyle": "line",
+      "stacking": {
+       "mode": "none",
+       "group": "A"
+      },
+      "axisSoftMin": 0
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "bottom",
+     "showLegend": true,
+     "calcs": [
+      "lastNotNull",
+      "mean",
+      "max"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "desc"
+    }
+   }
+  },
+  {
+   "id": 26,
+   "type": "row",
+   "title": "3 · Proceso del order book (métricas de la propia aplicación)",
+   "description": "Equivalente de plataforma para un único escritor: ¿arranca, se reinicia, cuánto consume?",
+   "collapsed": false,
+   "panels": [],
+   "gridPos": {
+    "x": 0,
+    "y": 53,
+    "w": 24,
+    "h": 1
+   }
+  },
+  {
+   "id": 27,
+   "type": "stat",
    "title": "Tiempo en marcha",
    "description": "Desde el último arranque del proceso. Amarillo = arrancó hace menos de 1 minuto (recién recreado).",
    "datasource": {
@@ -774,7 +1603,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -827,7 +1656,7 @@
    }
   },
   {
-   "id": 15,
+   "id": 28,
    "type": "stat",
    "title": "Reinicios (1 h)",
    "description": "Veces que el proceso arrancó en la última hora (crash, OOM o despliegue). 0 = estable.",
@@ -837,7 +1666,7 @@
    },
    "gridPos": {
     "x": 4,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -894,7 +1723,7 @@
    }
   },
   {
-   "id": 16,
+   "id": 29,
    "type": "stat",
    "title": "CPU del proceso (núcleos)",
    "description": "Núcleos que consume el order book (sin límite de CPU en el pod, a propósito).",
@@ -904,7 +1733,7 @@
    },
    "gridPos": {
     "x": 8,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -953,7 +1782,7 @@
    }
   },
   {
-   "id": 17,
+   "id": 30,
    "type": "stat",
    "title": "Memoria RSS",
    "description": "Memoria residente. El límite del pod es 4 GiB (local) y GOMEMLIMIT=3 GiB hace que el GC apriete antes.",
@@ -963,7 +1792,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -1019,7 +1848,7 @@
    }
   },
   {
-   "id": 18,
+   "id": 31,
    "type": "stat",
    "title": "Goroutines",
    "description": "Hilos ligeros del programa.",
@@ -1029,7 +1858,7 @@
    },
    "gridPos": {
     "x": 16,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -1078,7 +1907,7 @@
    }
   },
   {
-   "id": 19,
+   "id": 32,
    "type": "stat",
    "title": "Descriptores abiertos",
    "description": "Archivos y sockets abiertos por el proceso.",
@@ -1088,7 +1917,7 @@
    },
    "gridPos": {
     "x": 20,
-    "y": 25,
+    "y": 54,
     "w": 4,
     "h": 4
    },
@@ -1137,7 +1966,7 @@
    }
   },
   {
-   "id": 20,
+   "id": 33,
    "type": "timeseries",
    "title": "CPU y memoria del proceso",
    "description": "Consumo del pod del order book a lo largo de la prueba.",
@@ -1147,7 +1976,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 29,
+    "y": 58,
     "w": 12,
     "h": 8
    },
@@ -1211,7 +2040,7 @@
    }
   },
   {
-   "id": 21,
+   "id": 34,
    "type": "timeseries",
    "title": "Objetivos de Prometheus (1 = arriba)",
    "description": "Si un objetivo cae a 0, Prometheus dejó de ver ese componente.",
@@ -1221,7 +2050,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 29,
+    "y": 58,
     "w": 12,
     "h": 8
    },

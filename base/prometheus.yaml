@@ -1,5 +1,11 @@
 # Mismo prometheus.yml y mismas alertas que docker-compose (se sincronizan desde el repo de la app: scripts/sync-observability.sh).
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+automountServiceAccountToken: true   # único pod que monta token: lo necesita para consultar las métricas de cAdvisor a través del API server
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: prometheus
@@ -23,7 +29,8 @@ spec:
     metadata:
       labels: {app.kubernetes.io/name: prometheus}
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: prometheus
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534

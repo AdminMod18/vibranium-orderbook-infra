@@ -20,4 +20,5 @@ k rollout status statefulset/postgres   --timeout=240s
 k rollout status statefulset/orderbook  --timeout=420s
 k rollout status statefulset/prometheus --timeout=180s
 k rollout status deployment/grafana     --timeout=180s
+k rollout status deployment/kube-state-metrics --timeout=180s
 k get pods,svc,ingress,pvc
