@@ -15,7 +15,7 @@ Cliente / JMeter ──► Ingress (nginx) ──► Service orderbook:8080 ─�
 
 | Ruta | Qué es |
 |---|---|
-| `base/` | Todo lo común: order book, Postgres, Prometheus, Grafana, ingress, NetworkPolicy. Dashboards y alertas en `base/observability/` |
+| `base/` | Todo lo común: order book, Postgres, Prometheus, Grafana, ingress, NetworkPolicy. Dashboards (app y plataforma) y alertas en `base/observability/` |
 | `overlays/{local,staging,prod}/` | Lo que cambia por ambiente: namespace, imagen, hosts, tamaños, secretos (3 archivos pequeños cada uno) |
 | `components/demo-secrets/` | Credenciales de demo, **solo** para `local` |
 | `platform/ingress-nginx/` | Controlador de ingress, versión fijada |
@@ -62,7 +62,7 @@ CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging               # exige confirmar 
 | Los 3 overlays compilan, cumplen el esquema de Kubernetes 1.31 (kubeconform) y las políticas de `scripts/policy.py` | ✅ ejecutado (CI en cada push) |
 | Las políticas detectan imagen `latest`, réplicas ≠ 1 en el escritor y Secrets en git (mutaciones) | ✅ ejecutado |
 | Despliegue real en kind (CI): cluster, ingress, imagen, 4 rollouts | ✅ ejecutado |
-| Humo 19/19: tráfico por el ingress, `/metrics` cerrado, 13 alertas, Grafana, historial, NetworkPolicy aplicadas | ✅ ejecutado |
+| Humo (ahora 30 comprobaciones, incl. que cada métrica del dashboard de plataforma exista): tráfico por el ingress, `/metrics` cerrado, 13 alertas, Grafana, historial, NetworkPolicy aplicadas | ✅ ejecutado |
 | Caos: crash del pod → estado idéntico, **RTO 4.1 s en CI / 10.7 s en la laptop** (journal casi vacío); Postgres caído → el mercado sigue y el historial se reconcilia | ✅ ejecutado |
 | Ejecución en Docker Desktop (laptop del autor): despliegue + humo 19/19 | ✅ ejecutado · caos ✅ (RTO 10.7 s) · carga: ⏳ pendiente |
 | Staging y prod | plantillas validadas estáticamente; no desplegadas |

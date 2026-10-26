@@ -58,12 +58,15 @@ los recursos se ajustan por overlay sin tocar la base.
 ## 5. Observabilidad
 
 - Mismo dashboard (43 paneles) y mismas 13 alertas que en docker-compose, provisionados desde ConfigMaps.
+- **Un segundo dashboard de plataforma** (`Vibranium — Plataforma (Kubernetes)`, generado por `observability/generate_platform_dashboard.py`): entrada de tráfico
+  (peticiones/s, 5xx y p95/p99 en el ingress, **latencia del ingress frente a la del servidor**, conciliación de tráfico) y el pod del order book
+  (uptime, reinicios, CPU, memoria, descriptores). Prometheus raspa también el ingress-nginx (`prometheus.platform.yml`; el job del ingress solo existe en el cluster).
 - Prometheus con volumen (2 días de retención) y Grafana provisionado, ambos con sondas y límites.
 - `/metrics` y pprof están en el **puerto 9102, que no se publica por el ingress**; solo Prometheus lo alcanza (NetworkPolicy).
   `scripts/smoke.sh` comprueba que `/metrics` y `/debug/pprof` responden distinto de 200 por el ingress.
 - `scripts/smoke.sh` también verifica que Prometheus ve el target `up` y que las 13 alertas están cargadas.
 - **No incluido (limitaciones):** Alertmanager (las alertas se evalúan y se ven en la UI, igual que en la app), métricas de
-  Kubernetes (`kube-state-metrics`, cAdvisor) y agregación de logs. Se agregarían con `kube-prometheus-stack` y Loki; se omitió
+  Kubernetes (`kube-state-metrics`, cAdvisor) y agregación de logs. El estado de los pods y el consumo de contenedor se consultan con `kubectl`; el dashboard usa las métricas del propio proceso como equivalente. Se agregarían con `kube-prometheus-stack` y Loki; se omitió
   para no sobredimensionar.
 
 ## 6. Seguridad por defecto

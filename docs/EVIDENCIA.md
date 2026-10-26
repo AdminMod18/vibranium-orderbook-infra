@@ -12,6 +12,20 @@ para poder comprobarla. **No es una prueba de rendimiento** y **no corrió en un
 | 2 | `a7cb033` | ✅ todo | La prueba espera el primer scrape y añade dos comprobaciones nuevas (historial y NetworkPolicy). [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40392630656) |
 | 3 | `b891b15` | ✅ todo | Sondas del order book cada 2 s en lugar de 5 s. [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40393090703) |
 
+## Dashboard de plataforma (ejecuciones 8-10)
+
+Se añadió un segundo dashboard (`plataforma-k8s`: ingress-nginx y pod del order book) y el smoke pasó a comprobar contra el Prometheus real que **cada métrica
+que usa existe** (un panel con "No data" falla el CI). Esa comprobación encontró dos problemas reales, ambos corregidos:
+
+| Ejecución | Hallazgo | Corrección |
+|---|---|---|
+| 8 ❌ | 3 métricas `nginx_ingress_controller_*` sin datos: el manifiesto oficial de kind trae `--enable-metrics=false` | Se activa con un parche que lleva un `test` (si cambia la versión y el argumento se mueve, el build falla en vez de aplicar algo distinto). |
+| 8 ❌ | Mi comprobación `up{job="ingress-nginx"}` solo miraba que el target **existiera**, no que valiera 1: habría dado por bueno un target caído | Ahora exige valor `1`. |
+| 9 ❌ | `kill-pod`: la comparación antes/después difirió. El estado "antes" incluía `GET /orders/{id}`, que lee del historial (eventualmente consistente) y aún no tenía la orden recién creada. Era una **carrera de mi prueba**, no un fallo de recuperación | El seed espera a que el historial alcance al journal antes de fotografiar el estado. |
+| 10 ✅ | Smoke con todas las métricas y las dos pruebas de caos | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40401914740) |
+
+**Lo que NO se comprobó:** que los paneles del dashboard de plataforma *se vean bien* en un navegador. El CI verifica que las métricas existen y el dashboard se provisiona, no el aspecto.
+
 ## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
 
 | Qué | Resultado |
