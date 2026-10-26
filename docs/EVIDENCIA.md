@@ -12,6 +12,20 @@ para poder comprobarla. **No es una prueba de rendimiento** y **no corrió en un
 | 2 | `a7cb033` | ✅ todo | La prueba espera el primer scrape y añade dos comprobaciones nuevas (historial y NetworkPolicy). [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40392630656) |
 | 3 | `b891b15` | ✅ todo | Sondas del order book cada 2 s en lugar de 5 s. [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40393090703) |
 
+## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
+
+| Qué | Resultado |
+|---|---|
+| Entorno | Windows + Docker Desktop, `kind v0.33.0`, nodo `kindest/node:v1.37.0`, scripts ejecutados desde Git Bash |
+| `kind-up.sh` → `build-image.sh` → `deploy.sh local` | ✅ cluster, ingress, imagen y 4 pods `Running` (3 PVC enlazados) en ~34 s tras construir la imagen |
+| `smoke.sh` | ✅ **19/19** (`SMOKE OK`), incluido el historial con lag 0 y NetworkPolicy aplicadas |
+| Caos (`kill-pod`, `postgres-down`) | ⏳ pendiente de ejecutar en esta máquina |
+| Carga con JMeter a través del ingress | ⏳ pendiente |
+
+**Problema real encontrado solo en Windows (y corregido):** `build-image.sh` falló con `unable to prepare context: path ".../vibranium-orderbook-meli" not found`.
+La causa era `MSYS_NO_PATHCONV=1` (necesario para otros comandos): hacía que `docker.exe` recibiera una ruta estilo `/c/Users/...`, que no entiende.
+Ahora el script la convierte con `cygpath -m` solo para `docker build` (commit `fb0ec48`). El CI en Linux no podía detectarlo, y por eso es útil ejecutar también en la máquina del autor.
+
 ## Prueba de humo (ejecución 2 y 3): 19/19 comprobaciones
 
 - El tráfico entra **por el ingress**: `/readyz` y `/healthz` = 200.
