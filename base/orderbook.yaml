@@ -56,16 +56,17 @@ spec:
             - {name: ADMIN_PORT, value: "9102"}
             - {name: LOG_LEVEL, value: info}
           # Arranque: el journal se reproduce (~8 s por millón de registros): se tolera hasta 5 min antes de matar el pod.
+          # Sondeo cada 2 s (no 5): el periodo se suma directamente al tiempo de recuperación (medido, docs/EVIDENCIA.md).
           startupProbe:
             httpGet: {path: /healthz, port: http}
-            periodSeconds: 5
-            failureThreshold: 60
+            periodSeconds: 2
+            failureThreshold: 150
           # Solo recibe tráfico cuando el secuenciador está activo.
           readinessProbe:
             httpGet: {path: /readyz, port: http}
-            periodSeconds: 5
+            periodSeconds: 2
             timeoutSeconds: 2
-            failureThreshold: 2
+            failureThreshold: 3
           livenessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 10
