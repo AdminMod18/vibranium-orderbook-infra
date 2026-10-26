@@ -32,6 +32,9 @@ jobs:
           repository: AdminMod18/vibranium-orderbook-meli
           ref: ${{ inputs.app_ref || 'main' }}
           path: app
+          # Si el repo de la app es PRIVADO, el token por defecto no puede leerlo: defina el secreto APP_REPO_TOKEN
+          # (token de acceso fino con permiso de solo lectura de contenido sobre ese repo). Con el repo público no hace falta.
+          token: ${{ secrets.APP_REPO_TOKEN || github.token }}
       - name: Cluster kind + ingress-nginx
         run: scripts/kind-up.sh
       - name: Construir y cargar la imagen de la app

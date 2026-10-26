@@ -55,6 +55,11 @@ CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging               # exige confirmar 
 
 **Añadir un ambiente** = copiar `overlays/staging/` a `overlays/<nombre>/` y cambiar namespace, imagen y hosts. El resto se hereda de `base/`.
 
+## CI con el repo de la app privado
+
+El job `e2e` clona el repo de la app. Si ese repo es **privado**, cree un token de acceso fino (GitHub → Settings → Developer settings → Fine-grained tokens) con permiso
+*Contents: Read-only* solo sobre `vibranium-orderbook-meli` y guárdelo en este repo como secreto `APP_REPO_TOKEN` (Settings → Secrets and variables → Actions). Con el repo público no hace falta.
+
 ## Estado de la verificación
 
 | Qué | Estado |
