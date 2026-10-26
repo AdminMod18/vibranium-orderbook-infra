@@ -23,6 +23,7 @@ que usa existe** (un panel con "No data" falla el CI). Esa comprobación encontr
 | 8 ❌ | Mi comprobación `up{job="ingress-nginx"}` solo miraba que el target **existiera**, no que valiera 1: habría dado por bueno un target caído | Ahora exige valor `1`. |
 | 9 ❌ | `kill-pod`: la comparación antes/después difirió. El estado "antes" incluía `GET /orders/{id}`, que lee del historial (eventualmente consistente) y aún no tenía la orden recién creada. Era una **carrera de mi prueba**, no un fallo de recuperación | El seed espera a que el historial alcance al journal antes de fotografiar el estado. |
 | 10 ✅ | Smoke con todas las métricas y las dos pruebas de caos | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40401914740) |
+| 12 ✅ | Se añaden **cAdvisor y kube-state-metrics** (CPU/memoria/red por pod, reinicios, límites declarados). El smoke exige que existan 17 métricas y que `up = 1` en los jobs `ingress-nginx`, `cadvisor` y `kube-state-metrics`; pasó a la primera. | [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40402738808) |
 
 **Lo que NO se comprobó:** que los paneles del dashboard de plataforma *se vean bien* en un navegador. El CI verifica que las métricas existen y el dashboard se provisiona, no el aspecto.
 

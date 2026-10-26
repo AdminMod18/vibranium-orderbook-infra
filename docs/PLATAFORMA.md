@@ -58,16 +58,15 @@ los recursos se ajustan por overlay sin tocar la base.
 ## 5. Observabilidad
 
 - Mismo dashboard (43 paneles) y mismas 13 alertas que en docker-compose, provisionados desde ConfigMaps.
-- **Un segundo dashboard de plataforma** (`Vibranium — Plataforma (Kubernetes)`, generado por `observability/generate_platform_dashboard.py`): entrada de tráfico
-  (peticiones/s, 5xx y p95/p99 en el ingress, **latencia del ingress frente a la del servidor**, conciliación de tráfico) y el pod del order book
-  (uptime, reinicios, CPU, memoria, descriptores). Prometheus raspa también el ingress-nginx (`prometheus.platform.yml`; el job del ingress solo existe en el cluster).
-- Prometheus con volumen (2 días de retención) y Grafana provisionado, ambos con sondas y límites.
+- **Un segundo dashboard de plataforma** (`Vibranium — Plataforma (Kubernetes)`, generado por `observability/generate_platform_dashboard.py`, con selector de namespace/ambiente):
+  1. **Entrada de tráfico (ingress-nginx):** peticiones/s, 5xx, p95/p99, respuestas por código, **latencia del ingress frente a la del servidor** y conciliación de tráfico.
+  2. **Pods del namespace (cAdvisor + kube-state-metrics):** CPU, memoria y red reales de cada pod; reinicios y pods listos; y el **uso del order book frente a su request y su límite** declarados (memoria 4 GiB, CPU).
+  3. **Proceso del order book:** uptime, reinicios y consumo vistos por la propia aplicación.
+  Prometheus raspa el ingress, cAdvisor (a través del API server, con un `ClusterRole` de solo lectura sobre nodos) y kube-state-metrics (un `Role` limitado al namespace y a 4 tipos de recurso).
 - `/metrics` y pprof están en el **puerto 9102, que no se publica por el ingress**; solo Prometheus lo alcanza (NetworkPolicy).
   `scripts/smoke.sh` comprueba que `/metrics` y `/debug/pprof` responden distinto de 200 por el ingress.
 - `scripts/smoke.sh` también verifica que Prometheus ve el target `up` y que las 13 alertas están cargadas.
-- **No incluido (limitaciones):** Alertmanager (las alertas se evalúan y se ven en la UI, igual que en la app), métricas de
-  Kubernetes (`kube-state-metrics`, cAdvisor) y agregación de logs. El estado de los pods y el consumo de contenedor se consultan con `kubectl`; el dashboard usa las métricas del propio proceso como equivalente. Se agregarían con `kube-prometheus-stack` y Loki; se omitió
-  para no sobredimensionar.
+- **No incluido (limitaciones):** Alertmanager (las alertas se evalúan y se ven en la UI, igual que en la app), alertas sobre las métricas de plataforma y agregación de logs. Los logs se consultan con `kubectl logs`; agregarlos requeriría Loki, que se omitió para no sobredimensionar.
 
 ## 6. Seguridad por defecto
 
@@ -77,6 +76,7 @@ los recursos se ajustan por overlay sin tocar la base.
 - **NetworkPolicy**: se deniega todo el tráfico entrante y se abren solo las rutas necesarias (ingress → API, Prometheus → 9102,
   orderbook → Postgres, Grafana → Prometheus). *Comprobado:* una NetworkPolicy solo se aplica si el CNI la implementa; en el kind del CI **sí se aplican**
   (`scripts/smoke.sh` §6: un pod sin etiqueta no alcanza a Postgres). En otro cluster, el script lo vuelve a informar.
+- **RBAC mínimo:** solo Prometheus monta un token. Su `ClusterRole` permite leer nodos y sus métricas (no escribir nada); kube-state-metrics usa un `Role` limitado al namespace. `scripts/policy.py` verifica que cada binding apunte al namespace de su ambiente.
 - **Secretos fuera de git** en staging/prod (`scripts/create-secret.sh`, contraseñas aleatorias, no sobrescribe uno existente).
   `local` usa credenciales de demo, aisladas en `components/demo-secrets` y rechazadas por la política en cualquier otro ambiente.
 - Imágenes con versión fija; `prod` exige una versión inmutable (la política lo verifica). `deploy.sh` exige confirmar el contexto de
@@ -98,7 +98,7 @@ los recursos se ajustan por overlay sin tocar la base.
 ## 8. Pendiente / siguientes pasos (no implementado)
 
 TLS con cert-manager; despliegue continuo con Argo CD o Flux (hoy el despliegue es `kubectl apply -k` desde un script); Alertmanager;
-`kube-state-metrics`; secretos con External Secrets o Sealed Secrets; copias del journal con `VolumeSnapshot`; aprovisionar el cluster
+secretos con External Secrets o Sealed Secrets; copias del journal con `VolumeSnapshot`; aprovisionar el cluster
 cloud con Terraform (EKS/GKE); réplica seguidora para HA del escritor; shardear por mercado.
 
 ## 9. Verificación
