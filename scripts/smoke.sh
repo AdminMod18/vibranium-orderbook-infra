@@ -55,8 +55,9 @@ for m in up nginx_ingress_controller_requests nginx_ingress_controller_request_d
          process_resident_memory_bytes process_open_fds go_goroutines orderbook_http_requests_total; do
   prom_has "$m" && pass "métrica disponible: $m" || bad "métrica disponible: $m" "sin datos en Prometheus"
 done
-UPI=$(k exec prometheus-0 -- wget -qO- "http://localhost:9090/api/v1/query?query=up" 2>&1)
-has "Prometheus alcanza el ingress (job ingress-nginx, up)" "$UPI" '"job":"ingress-nginx"'
+UPI=""; for _ in $(seq 1 30); do   # up{job="ingress-nginx"} debe VALER 1 (no basta con que exista el target)
+  UPI=$(k exec prometheus-0 -- wget -qO- 'http://localhost:9090/api/v1/query?query=up%7Bjob%3D%22ingress-nginx%22%7D' 2>&1); [[ "$UPI" == *',"1"]'* ]] && break; sleep 2; done
+has "Prometheus alcanza el ingress (up{job=ingress-nginx} = 1)" "$UPI" ',"1"]'
 
 echo "5) Historial en Postgres (order book -> Postgres a través de las NetworkPolicy)"
 H=""; for _ in $(seq 1 60); do H=$(api "/audit/history/$AL"); [[ "$H" == *'"lag":0'* ]] && break; sleep 2; done

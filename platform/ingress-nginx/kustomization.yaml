@@ -4,3 +4,10 @@ kind: Kustomization
 resources:
   - https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.2/deploy/static/provider/kind/deploy.yaml
   - metrics-service.yaml
+patches:
+  # El manifiesto oficial para kind trae --enable-metrics=false. Se activa para que Prometheus vea el ingress.
+  # El `test` hace que, si al subir la versión del controlador el argumento cambia de posición, el build FALLE en vez de aplicar algo distinto.
+  - target: {kind: Deployment, name: ingress-nginx-controller}
+    patch: |-
+      - {op: test, path: /spec/template/spec/containers/0/args/9, value: --enable-metrics=false}
+      - {op: replace, path: /spec/template/spec/containers/0/args/9, value: --enable-metrics=true}
