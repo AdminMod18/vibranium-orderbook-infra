@@ -50,17 +50,23 @@ JMeter apuntando a `localhost:8080` (ingress del cluster kind), plan `vibranium-
 | El panel del ingress mostraba ~7 peticiones/s (solo Grafana) mientras el servidor contaba ~10 K/s; "p95/p99 en el ingress" salía **No data** | El controlador solo registra métricas de hosts declarados en algún Ingress; el del order book no declara host (para aceptar `localhost`) y sus peticiones se descartaban. Causa inferida de ese comportamiento y del síntoma; **confirmada en la laptop** tras aplicar el arreglo: aparece la serie `orderbook` en el ingress (≈ 8.2 K req/s, p95 ≈ 21 ms, p99 ≈ 33 ms, 0 errores 5xx), y las peticiones del ingress coinciden con las del servidor. | `--metrics-per-host=false`; el smoke exige la serie `ingress="orderbook"` (no podía detectarlo antes: el humo solo consultaba que existiera *alguna* serie del ingress, y las de Grafana la satisfacían). |
 | "Reinicios (1 h)" mostraba **62 y luego 94** sin que el pod hubiera reiniciado | `process_start_time_seconds` salta ±1 s en Docker Desktop/WSL2 y `changes()` cuenta cada salto | Uptime y reinicios salen ahora de kube-state-metrics (`kube_pod_container_state_started`, `kube_pod_container_status_restarts_total`). |
 
-## Observación abierta: segunda corrida con timeouts de lectura (en análisis)
+## Hallazgo: el cluster de la laptop se colgó bajo carga (causa sin determinar)
 
-En una segunda corrida de JMeter (GUI, mismo cluster, sin reiniciarlo desde la primera) se vieron muestras `POST /orders` con `java.net.SocketTimeoutException: Read timed out`
-(el plan espera hasta 10 s por respuesta) a partir de los ~6 min. Datos disponibles hasta ahora, **sin conclusión todavía**:
+En una segunda corrida de JMeter (GUI, mismo cluster, sin reiniciarlo desde la primera) aparecieron `POST /orders` con `java.net.SocketTimeoutException: Read timed out`
+(el plan espera hasta 10 s) a partir de los ~6 min, y poco después **todo el cluster dejó de responder**. Hechos observados:
 
-- A los 3 min la corrida estaba sana: ingress ≈ 8.2 K req/s, p95 21 ms, p99 33 ms, 0 errores 5xx, 5 pods listos, 0 reinicios.
-- El order book usaba ≈ 3.4-3.7 GiB (working set de cAdvisor) sobre su límite de 4 GiB, mientras su RSS era ≈ 2.3 GiB: la diferencia (~1 GiB) es memoria que el cgroup cuenta pero el proceso no, p. ej. caché de página del journal (hipótesis).
-- El cluster acumulaba ya el estado de la primera corrida (≈ 4.3 M órdenes y su journal) más esta.
-- Un tramo de latencia de 1.6-1.8 s se ve en el panel ingress-vs-servidor (compatible con una pausa de snapshot ya documentada, pero un timeout de 10 s no lo es).
+- A los 3 min la corrida estaba sana: ingress ≈ 8.2 K req/s, p95 21 ms, p99 33 ms, 0 errores 5xx, 5 pods listos, 0 reinicios. El order book usaba 3.4-3.7 GiB (working set) sobre su límite de 4 GiB, con un RSS de ≈ 2.3 GiB.
+- Después: `kubectl` dio `TLS handshake timeout` durante más de 30 minutos; `docker ps` y `docker exec` no respondían; el navegador recibía `ERR_CONNECTION_REFUSED` en el puerto 8080.
+- Los indicadores de Docker Desktop quedaron **congelados** (594.97 % y 589.43 % de CPU con casi 30 min de diferencia), señal de que el motor había dejado de actualizar.
+- El Administrador de tareas de Windows (con la laptop ya en reposo) mostraba CPU 8 %, disco 2 %, memoria 76 %.
+- Reiniciar Docker Desktop no lo recuperó; se eliminó el contenedor del nodo y se recreó el cluster. Se perdió el estado de pruebas de la laptop (journal e historial), no entregables.
+- Docker Desktop mostraba el aviso de **versión sin soporte**.
 
-Pendiente: reinicios/OOM del pod, logs del order book, panel de fsync y de GC de la app. No se debe presentar esta corrida como "0 errores".
+**No se capturaron logs antes de borrarlo, así que la causa raíz es desconocida.** Hipótesis, sin verificar: agotamiento de memoria de la VM, contención de disco entre el plano de control (etcd) y el `fsync` del journal en un nodo único, o un fallo del propio motor de Docker Desktop.
+
+**Qué se puede afirmar:** un cluster de un solo nodo en una laptop, con carga ≈ 8 K órdenes/s generada por JMeter en GUI en la misma máquina, no es un entorno fiable para medir. No es evidencia de que el servicio falle a 5 K órdenes/s (el CI y las dos primeras corridas de la laptop lo respaldan), ni de lo contrario.
+
+**Mitigaciones propuestas:** corrida de 5 K/s lanzada por consola, con otras aplicaciones cerradas; actualizar Docker Desktop con margen antes de la demo; en un cluster real, plano de control en nodos separados de la carga.
 
 ## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
 
