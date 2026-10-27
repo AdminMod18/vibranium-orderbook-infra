@@ -24,5 +24,28 @@ patches:
   - target: {kind: StatefulSet, name: orderbook}
     patch: |-
       - {op: add, path: /spec/template/spec/containers/0/imagePullPolicy, value: IfNotPresent}
-      - {op: replace, path: /spec/template/spec/containers/0/resources/requests/cpu, value: 500m}      # laptops: no reservar un núcleo entero
+      - {op: replace, path: /spec/template/spec/containers/0/resources/requests/cpu, value: 200m}
       - {op: replace, path: /spec/template/spec/containers/0/resources/requests/memory, value: 1Gi}
+  # Requests de CPU MÍNIMOS solo en local: reservan capacidad para el planificador pero no limitan el uso real. Con los valores de la base
+  # (1 núcleo para el order book, etc.) el cluster no cabe en nodos de 2 vCPU (p. ej. los runners del CI de un repo PRIVADO): el último pod
+  # queda en Pending con "Insufficient cpu". Staging y prod conservan los de la base.
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata: {name: postgres}
+      spec: {template: {spec: {containers: [{name: postgres, resources: {requests: {cpu: 100m}}}]}}}
+  - patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata: {name: prometheus}
+      spec: {template: {spec: {containers: [{name: prometheus, resources: {requests: {cpu: 50m}}}]}}}
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: grafana}
+      spec: {template: {spec: {containers: [{name: grafana, resources: {requests: {cpu: 50m}}}]}}}
+  - patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata: {name: kube-state-metrics}
+      spec: {template: {spec: {containers: [{name: kube-state-metrics, resources: {requests: {cpu: 10m}}}]}}}
