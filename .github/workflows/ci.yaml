@@ -27,6 +27,26 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Comprobar acceso al repo de la app (secreto APP_REPO_TOKEN)
+        env:
+          APP_REPO_TOKEN: ${{ secrets.APP_REPO_TOKEN }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          # Diagnóstico claro y sin imprimir nunca el valor del secreto.
+          repo=AdminMod18/vibranium-orderbook-meli
+          if [ -z "$APP_REPO_TOKEN" ]; then
+            if git ls-remote --exit-code "https://github.com/$repo" HEAD >/dev/null 2>&1; then
+              echo "El repo de la app es público: no hace falta token."; exit 0
+            fi
+            echo "::error::El secreto APP_REPO_TOKEN NO está disponible en este repositorio y el repo de la app es privado. Créalo en Settings > Secrets and variables > Actions > pestaña 'Repository secrets' DE ESTE repo (vibranium-orderbook-infra), con ese nombre exacto."
+            exit 1
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $APP_REPO_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$repo")
+          echo "APP_REPO_TOKEN presente (${#APP_REPO_TOKEN} caracteres); lectura del repo de la app: HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::El token existe pero GitHub responde HTTP $code al leer $repo: revisa que sea un token fino con 'Repository access' = vibranium-orderbook-meli y 'Contents: Read-only', y que no haya caducado."
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           repository: AdminMod18/vibranium-orderbook-meli
