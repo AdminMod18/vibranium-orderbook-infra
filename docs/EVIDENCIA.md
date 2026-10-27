@@ -94,7 +94,7 @@ Cluster nuevo (estado vacío), JMeter contra `localhost:8080` (ingress), Summary
 
 Límites: ritmo medio por encima de los 5 K del plan (no es la corrida de 5 K); modo GUI en una sola laptop con el cluster y Grafana; no es una medición de capacidad.
 El máximo de ~1 s afecta a todos los endpoints a la vez (parada puntual compatible con la escritura periódica del snapshot, limitación ya documentada).
-**Pendiente de comprobar tras la corrida:** que el historial en Postgres llegó a `lag 0` y `/audit/history/<usuario>` dio `consistent: true`.
+**Comprobado por el autor tras la corrida:** el historial en Postgres se drenó hasta `lag 0` y la auditoría terminó correcta (sin captura guardada de esa comprobación).
 
 ## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
 
