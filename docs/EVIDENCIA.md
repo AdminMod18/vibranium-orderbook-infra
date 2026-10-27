@@ -50,6 +50,19 @@ JMeter apuntando a `localhost:8080` (ingress del cluster kind), plan `vibranium-
 | El panel del ingress mostraba ~7 peticiones/s (solo Grafana) mientras el servidor contaba ~10 K/s; "p95/p99 en el ingress" salía **No data** | El controlador solo registra métricas de hosts declarados en algún Ingress; el del order book no declara host (para aceptar `localhost`) y sus peticiones se descartaban. Causa inferida de ese comportamiento y del síntoma; **confirmada en la laptop** tras aplicar el arreglo: aparece la serie `orderbook` en el ingress (≈ 8.2 K req/s, p95 ≈ 21 ms, p99 ≈ 33 ms, 0 errores 5xx), y las peticiones del ingress coinciden con las del servidor. | `--metrics-per-host=false`; el smoke exige la serie `ingress="orderbook"` (no podía detectarlo antes: el humo solo consultaba que existiera *alguna* serie del ingress, y las de Grafana la satisfacían). |
 | "Reinicios (1 h)" mostraba **62 y luego 94** sin que el pod hubiera reiniciado | `process_start_time_seconds` salta ±1 s en Docker Desktop/WSL2 y `changes()` cuenta cada salto | Uptime y reinicios salen ahora de kube-state-metrics (`kube_pod_container_state_started`, `kube_pod_container_status_restarts_total`). |
 
+## CI con los repositorios privados (ejecuciones 21-25)
+
+Al pasar los dos repos a **privados** (requisito del reto) el CI dejó de pasar, por dos causas independientes, ambas corregidas:
+
+| Ejecución | Síntoma | Causa | Corrección |
+|---|---|---|---|
+| 20-21 ❌ | `fatal: ... 403` al clonar el repo de la app | El token por defecto del workflow no puede leer *otro* repo privado | Secreto `APP_REPO_TOKEN` (token fino de solo lectura) |
+| 22 ❌ | El nuevo paso de diagnóstico: `token presente (93 caracteres); HTTP 404` | El token tenía acceso al repo pero **ningún permiso** (*Contents* sin añadir) | Añadir *Contents: Read-only* al token |
+| 23-24 ❌ | `postgres-0`/`prometheus-0` en `Pending`: `FailedScheduling ... 1 Insufficient cpu`; nodo al **96 % de CPU reservada (1920m de 2000m)** | Los runners de un repo privado tienen **2 vCPU** (4 en uno público): los requests de CPU no cabían | Requests de CPU mínimos solo en el overlay local (de ~970m a 410m); staging y prod conservan los suyos |
+| 25 ✅ | — | — | Despliegue, humo y caos completos con ambos repos privados. [log](https://github.com/AdminMod18/vibranium-orderbook-infra/actions/runs/40427761790) |
+
+Lección: el diagnóstico del secreto (qué falta, sin imprimir su valor) y el del planificador (eventos y recursos del nodo) convierten un "falló" en una causa legible; se dejaron en el workflow.
+
 ## Hallazgo: el cluster de la laptop se colgó bajo carga (causa sin determinar)
 
 En una segunda corrida de JMeter (GUI, mismo cluster, sin reiniciarlo desde la primera) aparecieron `POST /orders` con `java.net.SocketTimeoutException: Read timed out`
