@@ -1,75 +1,69 @@
 # vibranium-orderbook-infra
 
-Infraestructura como código (Kubernetes + Kustomize) para [`vibranium-orderbook-meli`](https://github.com/AdminMod18/vibranium-orderbook-meli).
-**Un solo conjunto de manifiestos reutilizable** que se despliega en varios ambientes (local, staging, prod) cambiando solo
-lo que de verdad difiere, sin copiar lógica. El diseño, las decisiones y las limitaciones están en [`docs/PLATAFORMA.md`](docs/PLATAFORMA.md).
+Infraestructura como código (Kubernetes + Kustomize) de [`vibranium-orderbook-meli`](https://github.com/AdminMod18/vibranium-orderbook-meli).
+**Un solo conjunto de manifiestos** se despliega en varios ambientes (local, staging, prod) cambiando solo lo que de verdad difiere.
 
+![Arquitectura en Kubernetes](docs/img/arquitectura-kubernetes.svg)
+
+## Levantarlo en local (4 comandos)
+
+**Necesitas:** Docker Desktop en marcha, [`kind`](https://kind.sigs.k8s.io/) (Windows: `winget install Kubernetes.kind`, y reabre la terminal) y `kubectl`.
+Clona **al lado** el repo de la app (`../vibranium-orderbook-meli`) o define `APP_DIR=<ruta>`. En Windows usa **Git Bash**. Detén antes `docker compose` de la app (usa el mismo puerto 8080).
+
+```bash
+scripts/kind-up.sh        # cluster kind + ingress-nginx
+scripts/build-image.sh    # construye la imagen de la app y la carga en el cluster
+scripts/deploy.sh local   # despliega y espera a que todo esté listo
+scripts/smoke.sh          # termina con SMOKE OK (30 comprobaciones)
 ```
-Cliente / JMeter ──► Ingress (nginx) ──► Service orderbook:8080 ──► StatefulSet orderbook (1 escritor + PVC con el journal)
-                         │                                              │  :9102 /metrics (NO sale por el ingress)
-                         └──► Grafana ◄── Prometheus (PVC) ─────────────┘
-                                                     orderbook ──► StatefulSet postgres (historial, PVC)
+
+| | |
+|---|---|
+| API | http://localhost:8080 |
+| Grafana (2 dashboards) | http://grafana.localtest.me:8080 (admin/admin en local) |
+
+## Probar qué pasa si algo falla
+
+```bash
+scripts/chaos.sh kill-pod         # mata el pod sin apagado ordenado: el estado sobrevive (journal en un volumen)
+scripts/chaos.sh postgres-down    # apaga Postgres: el mercado sigue y el historial se reconcilia solo
 ```
+
+**Carga contra el cluster** (todo el tráfico entra por el ingress), desde el repo de la app:
+`HOST=localhost PORT=8080 TPS=5000 jmeter/run-jmeter.sh sostenida`
+
+Borrar todo (**elimina los datos del cluster**): `scripts/kind-down.sh`
 
 ## Estructura
 
 | Ruta | Qué es |
 |---|---|
-| `base/` | Todo lo común: order book, Postgres, Prometheus, Grafana, ingress, NetworkPolicy. Dashboards (app y plataforma) y alertas en `base/observability/` |
-| `overlays/{local,staging,prod}/` | Lo que cambia por ambiente: namespace, imagen, hosts, tamaños, secretos (3 archivos pequeños cada uno) |
-| `components/demo-secrets/` | Credenciales de demo, **solo** para `local` |
-| `platform/ingress-nginx/` | Controlador de ingress, versión fijada |
-| `kind/cluster.yaml` | Cluster local de un nodo con el puerto 8080 del host hacia el ingress |
-| `scripts/` | `kind-up`, `build-image`, `deploy`, `smoke`, `chaos`, `validate`, `create-secret`, `sync-observability`, `kind-down` |
-| `.github/workflows/ci.yaml` | Valida cada overlay y, además, levanta kind y ejecuta humo y caos |
+| `base/` | Lo común a todos los ambientes: order book, Postgres, Prometheus, Grafana, ingress, NetworkPolicy, dashboards y alertas |
+| `overlays/{local,staging,prod}/` | Lo que cambia por ambiente: namespace, imagen, hosts, tamaños (3 archivos pequeños cada uno) |
+| `scripts/` | Despliegue, humo, caos, validación estática y utilidades |
+| `docs/` | `PLATAFORMA.md` (diseño y limitaciones) y `EVIDENCIA.md` (resultados reales y lo que no se probó) |
+| `.github/workflows/ci.yaml` | Valida cada overlay y ejecuta en un kind real el humo y el caos |
 
-## Requisitos
+Otros ambientes: `scripts/validate.sh` (estático, sin cluster) y `CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging`. **Añadir un ambiente** = copiar `overlays/staging/` y cambiar namespace, imagen y hosts.
 
-Docker Desktop (en marcha), [`kind`](https://kind.sigs.k8s.io/) y `kubectl`. En Windows: `winget install Kubernetes.kind`
-(kubectl viene con Docker Desktop). Clone **al lado** el repo de la app (`../vibranium-orderbook-meli`) o defina `APP_DIR`.
-Los scripts se ejecutan en Git Bash. **Detenga antes `docker compose` de la app** (ambos usan el puerto 8080; con `HTTP_PORT=8081` se cambia).
+## Si algo no funciona
 
-## Uso (ambiente local)
-
-```bash
-scripts/kind-up.sh          # cluster kind + ingress-nginx
-scripts/build-image.sh      # construye la imagen de la app y la carga en el cluster
-scripts/deploy.sh local     # aplica overlays/local y espera a que todo esté listo
-scripts/smoke.sh            # humo: ingress, ciclo de órdenes, /metrics cerrado, Prometheus/Grafana conectados
-scripts/chaos.sh kill-pod       # mata el pod sin apagado ordenado y comprueba que el estado sobrevive
-scripts/chaos.sh postgres-down  # apaga Postgres: el mercado sigue, el historial se reconcilia
-```
-
-- API: <http://localhost:8080> · Grafana: <http://grafana.localtest.me:8080> (admin/admin en local) · Prometheus: `kubectl -n vibranium-local port-forward svc/prometheus 9090`
-- **JMeter contra el cluster** (desde el repo de la app, todo el tráfico entra por el ingress):
-  `HOST=localhost PORT=8080 jmeter/run-jmeter.sh gradual` (o abra `vibranium-load.jmx` en la GUI con host `localhost` y puerto `8080`).
-- Eliminar todo (**borra los datos del cluster**): `scripts/kind-down.sh`
-
-## Otros ambientes
-
-```bash
-scripts/validate.sh                                           # estático, sin cluster
-CONFIRM_CONTEXT=<ctx> scripts/create-secret.sh staging        # contraseñas aleatorias, fuera de git
-CONFIRM_CONTEXT=<ctx> scripts/deploy.sh staging               # exige confirmar el contexto de kubectl
-```
-
-**Añadir un ambiente** = copiar `overlays/staging/` a `overlays/<nombre>/` y cambiar namespace, imagen y hosts. El resto se hereda de `base/`.
-
-## CI con el repo de la app privado
-
-El job `e2e` clona el repo de la app. Si ese repo es **privado**, cree un token de acceso fino (GitHub → Settings → Developer settings → Fine-grained tokens) con permiso
-*Contents: Read-only* solo sobre `vibranium-orderbook-meli` y guárdelo en este repo como secreto `APP_REPO_TOKEN` (Settings → Secrets and variables → Actions). Con el repo público no hace falta.
+| Síntoma | Qué hacer |
+|---|---|
+| `kind: command not found` tras instalarlo | Cierra **por completo** la terminal y ábrela de nuevo (el PATH se carga al abrirla) |
+| `solo quedan N GiB libres en el disco` | Libera espacio: una corrida genera varios GiB y, con el disco lleno, Docker se cuelga. Puedes forzar con `MIN_FREE_GB=<n>` bajo tu responsabilidad |
+| `docker` o `kubectl` no responden | El motor de Docker se colgó: ciérralo, `wsl --shutdown` (Windows), ábrelo de nuevo. Comprueba el espacio libre en `C:` |
+| El puerto 8080 está ocupado | `HTTP_PORT=8081 scripts/kind-up.sh` (y usa ese puerto en las URLs) |
+| El CI falla clonando la app | Si el repo de la app es **privado**, crea un token de solo lectura (*Contents: Read-only*) y guárdalo como secreto `APP_REPO_TOKEN` en este repo |
 
 ## Estado de la verificación
 
 | Qué | Estado |
 |---|---|
-| Los 3 overlays compilan, cumplen el esquema de Kubernetes 1.31 (kubeconform) y las políticas de `scripts/policy.py` | ✅ ejecutado (CI en cada push) |
-| Las políticas detectan imagen `latest`, réplicas ≠ 1 en el escritor y Secrets en git (mutaciones) | ✅ ejecutado |
-| Despliegue real en kind (CI): cluster, ingress, imagen, 4 rollouts | ✅ ejecutado |
-| Humo (ahora 30 comprobaciones, incl. que cada métrica del dashboard de plataforma exista): tráfico por el ingress, `/metrics` cerrado, 13 alertas, Grafana, historial, NetworkPolicy aplicadas | ✅ ejecutado |
-| Caos: crash del pod → estado idéntico, **RTO 4.1 s en CI / 10.7 s en la laptop** (journal casi vacío); Postgres caído → el mercado sigue y el historial se reconcilia | ✅ ejecutado |
-| Ejecución en Docker Desktop (laptop del autor): despliegue + humo 19/19 | ✅ ejecutado · caos ✅ (RTO 10.7 s) · carga: ⏳ pendiente |
-| Staging y prod | plantillas validadas estáticamente; no desplegadas |
+| Overlays válidos (kustomize, esquema de Kubernetes 1.31, políticas propias) | ✅ en cada push |
+| Despliegue en kind real, humo (30 comprobaciones) y las dos pruebas de caos | ✅ en el CI y en Docker Desktop |
+| Caos: crash del pod → estado idéntico, **RTO 4.1 s en CI y 10.7 s en la laptop** (journal casi vacío) | ✅ |
+| Carga por el ingress, 10 min: 4.56 M peticiones, **0 % de error**, ~7 000 órdenes/s | ✅ (JMeter GUI, una sola laptop: no es capacidad máxima) |
+| Staging y prod | plantillas validadas; **nunca desplegadas** |
 
 Detalle, enlaces a cada ejecución y lo que **no** se probó: [`docs/EVIDENCIA.md`](docs/EVIDENCIA.md).

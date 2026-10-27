@@ -68,6 +68,21 @@ En una segunda corrida de JMeter (GUI, mismo cluster, sin reiniciarlo desde la p
 
 **Mitigaciones propuestas:** corrida de 5 K/s lanzada por consola, con otras aplicaciones cerradas; actualizar Docker Desktop con margen antes de la demo; en un cluster real, plano de control en nodos separados de la carga.
 
+## Corrida limpia por el ingress tras recrear el cluster (10 min)
+
+Cluster nuevo (estado vacío), JMeter contra `localhost:8080` (ingress), Summary Report de JMeter (GUI), 10 min 2 s:
+
+| Dato | Valor |
+|---|---|
+| Muestras totales | **4,557,205** (`POST /orders` 4,246,325) |
+| % de error, todas las filas | **0.00 %**, incluidos los 6 rechazos esperados y `TEARDOWN GET /audit` (306 ms) |
+| Rendimiento | 7,570 peticiones/s en total; **7,078 `POST /orders`/s** |
+| Latencia media / máximo | 14 ms / 1,047 ms |
+
+Límites: ritmo medio por encima de los 5 K del plan (no es la corrida de 5 K); modo GUI en una sola laptop con el cluster y Grafana; no es una medición de capacidad.
+El máximo de ~1 s afecta a todos los endpoints a la vez (parada puntual compatible con la escritura periódica del snapshot, limitación ya documentada).
+**Pendiente de comprobar tras la corrida:** que el historial en Postgres llegó a `lag 0` y `/audit/history/<usuario>` dio `consistent: true`.
+
 ## Ejecución en la laptop del autor (Docker Desktop, Windows, Git Bash)
 
 | Qué | Resultado |

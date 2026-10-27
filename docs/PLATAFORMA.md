@@ -3,6 +3,8 @@
 Este documento explica **qué hace la plataforma, por qué** y **qué no hace todavía**. Usa la misma convención que
 `DECISIONES.md` de la app: se distingue lo comprobado de lo supuesto.
 
+![Arquitectura en Kubernetes](img/arquitectura-kubernetes.svg)
+
 ## 1. Qué es esto
 
 Un único conjunto de manifiestos (`base/`) más un overlay por ambiente. El objetivo no es la cantidad de piezas sino que el

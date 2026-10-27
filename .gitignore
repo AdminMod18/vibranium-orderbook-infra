@@ -1,5 +1,14 @@
 # Secretos y artefactos locales: nunca al repositorio
 *.secret
 secrets/
-.kind-http-port
-/tmp/
+.env
+kubeconfig*
+*.kubeconfig
+
+# Copias y archivos del sistema
+*.bundle
+*.tar.gz
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
