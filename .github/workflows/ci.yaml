@@ -71,6 +71,12 @@ jobs:
         if: failure()
         run: |
           kubectl -n vibranium-local get pods,pvc,ingress -o wide || true
+          kubectl -n vibranium-local get events --sort-by=.lastTimestamp | tail -40 || true
+          kubectl -n vibranium-local describe pvc || true
+          kubectl get storageclass,pv || true
+          kubectl -n local-path-storage get pods -o wide || true
+          kubectl -n local-path-storage logs deploy/local-path-provisioner --tail=60 || true
+          kubectl describe node | grep -A12 -E "Allocated resources|Conditions:" || true
           kubectl -n vibranium-local describe pods || true
           kubectl -n vibranium-local logs statefulset/orderbook --tail=200 || true
           kubectl -n ingress-nginx logs deploy/ingress-nginx-controller --tail=100 || true
